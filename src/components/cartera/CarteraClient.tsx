@@ -6,6 +6,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recha
 import {
   createValuation, createPosicion, updatePosicion, deletePosicion,
   createPasivo, updatePasivo, deletePasivo, registrarPagoPasivo,
+  getPagosPasivo, deletePagoPasivo,
   createRecurrente,
 } from "@/lib/actions";
 
@@ -234,6 +235,13 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
   const [pagoLoading, setPagoLoading]           = useState(false);
   const [pagoError, setPagoError]               = useState("");
 
+  /* ── Payment history per pasivo ── */
+  const [expandedPasivoId, setExpandedPasivoId]     = useState<string | null>(null);
+  const [pasivoHistory, setPasivoHistory]           = useState<Record<string, any[]>>({});
+  const [historyLoading, setHistoryLoading]         = useState(false);
+  const [projPage, setProjPage]                     = useState<Record<string, number>>({});
+  const CER_MENSUAL_DEFAULT = 0.03; // 3% monthly inflation assumption
+
   function resetPasivoForm() {
     setPNombre(""); setPTipo("prestamo"); setPSistema("frances"); setPMontoOrig(""); setPSaldo("");
     setPMoneda("ARS"); setPTasa(""); setPCuota(""); setPCapitalUva(""); setPNCuotas("");
@@ -350,16 +358,86 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
     e.preventDefault();
     if (!pagoMonto || !pagoCuentaId) return;
     setPagoLoading(true); setPagoError("");
+    const montoNum = parseFloat(pagoMonto);
     try {
       await registrarPagoPasivo(
-        pagoTargetPasivo.id, parseFloat(pagoMonto), pagoFecha,
+        pagoTargetPasivo.id, montoNum, pagoFecha,
         pagoCuentaId || null, pagoDesc || "", pagoCatId || null,
+        uvaEfectivo ?? undefined,
       );
-      const newSaldo = Math.max(0, Number(pagoTargetPasivo.saldo_pendiente) - parseFloat(pagoMonto));
+      // Recalculate displayed balance
+      let newSaldo: number;
+      if (pagoTargetPasivo.sistema_amortizacion === "uva" && pagoTargetPasivo.capital_uva && uvaEfectivo) {
+        const uvaEquiv = montoNum / uvaEfectivo;
+        const prevUdasPagadas = pasivoHistory[pagoTargetPasivo.id]
+          ?.reduce((s: number, p: any) => s + (Number(p.uva_equivalente) || 0), 0) || 0;
+        const saldoUdas = Math.max(0, Number(pagoTargetPasivo.capital_uva) - prevUdasPagadas - uvaEquiv);
+        newSaldo = saldoUdas * uvaEfectivo;
+      } else {
+        newSaldo = Math.max(0, Number(pagoTargetPasivo.saldo_pendiente) - montoNum);
+      }
       setPasivos(prev => prev.map(p => p.id === pagoTargetPasivo.id ? { ...p, saldo_pendiente: newSaldo } : p));
+      // Refresh history if visible
+      if (expandedPasivoId === pagoTargetPasivo.id) {
+        const hist = await getPagosPasivo(pagoTargetPasivo.id);
+        setPasivoHistory(prev => ({ ...prev, [pagoTargetPasivo.id]: hist }));
+      }
       setShowPagoModal(false);
     } catch (err: any) { setPagoError(err.message); }
     finally { setPagoLoading(false); }
+  }
+
+  async function togglePasivoHistory(pasivoId: string) {
+    if (expandedPasivoId === pasivoId) { setExpandedPasivoId(null); return; }
+    setExpandedPasivoId(pasivoId);
+    if (!pasivoHistory[pasivoId]) {
+      setHistoryLoading(true);
+      try {
+        const hist = await getPagosPasivo(pasivoId);
+        setPasivoHistory(prev => ({ ...prev, [pasivoId]: hist }));
+      } finally { setHistoryLoading(false); }
+    }
+  }
+
+  async function handleDeletePago(pagoId: string, pasivoId: string) {
+    if (!confirm("\u00BFEliminar este pago? El saldo pendiente se recalculará.")) return;
+    try {
+      await deletePagoPasivo(pagoId, pasivoId, uvaEfectivo ?? undefined);
+      const hist = await getPagosPasivo(pasivoId);
+      setPasivoHistory(prev => ({ ...prev, [pasivoId]: hist }));
+      // Reload pasivo list to get new saldo_pendiente
+      const updatedPasivos = await import("@/lib/actions").then(m => m.getPasivos ? m.getPasivos() : null);
+      if (updatedPasivos) setPasivos(updatedPasivos);
+    } catch (err: any) { alert("Error: " + err.message); }
+  }
+
+  // Generate installment projection for a UVA loan
+  function calcProyeccion(p: any, uvaActual: number, cerMensual: number, page: number) {
+    if (!p.capital_uva || !p.cuota_uva || !p.fecha_inicio) return [];
+    const cuotaUva = Number(p.cuota_uva);
+    const totalUvasPagadas = (pasivoHistory[p.id] || [])
+      .reduce((s: number, pg: any) => s + (Number(pg.uva_equivalente) || 0), 0);
+    const cuotasPagadas = Math.round(totalUvasPagadas / cuotaUva);
+    const start = cuotasPagadas + page * 10;
+    const result = [];
+    let uvaProyectado = uvaActual;
+    for (let i = 0; i < start; i++) uvaProyectado *= (1 + cerMensual);
+    const fechaBase = new Date(p.fecha_inicio + "T12:00:00");
+    fechaBase.setMonth(fechaBase.getMonth() + start);
+    for (let i = 0; i < 10; i++) {
+      const nCuota = start + i + 1;
+      if (nCuota > Number(p.n_cuotas)) break;
+      const fecha = new Date(fechaBase);
+      fecha.setMonth(fecha.getMonth() + i);
+      const mesMostrar = fecha.toLocaleDateString("es-AR", { month: "short", year: "numeric" });
+      result.push({
+        nCuota, mesMostrar,
+        uvaVal: uvaProyectado,
+        cuotaArs: Math.round(cuotaUva * uvaProyectado),
+      });
+      uvaProyectado *= (1 + cerMensual);
+    }
+    return result;
   }
 
   /* ── Cálculos patrimonio ── */
@@ -662,57 +740,198 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
           </div>
         ) : (
           <div className="glass-card overflow-hidden">
-            <table className="data-table w-full">
-              <thead><tr><th>Nombre</th><th>Tipo</th><th style={{ textAlign: "right" }}>Original</th><th style={{ textAlign: "right" }}>Pendiente</th><th style={{ textAlign: "right" }}>Pagado</th><th /></tr></thead>
-              <tbody>
-                {pasivos.map((p: any) => {
-                  const pct = Number(p.monto_original) > 0 ? ((Number(p.monto_original) - Number(p.saldo_pendiente)) / Number(p.monto_original)) * 100 : 0;
-                  return (
-                    <tr key={p.id}>
-                      <td>
+            {pasivos.map((p: any) => {
+              const pct = Number(p.monto_original) > 0
+                ? ((Number(p.monto_original) - Number(p.saldo_pendiente)) / Number(p.monto_original)) * 100
+                : 0;
+              const isExpanded = expandedPasivoId === p.id;
+              const isUva = p.sistema_amortizacion === "uva";
+              const history = pasivoHistory[p.id] || [];
+              const pageNum = projPage[p.id] || 0;
+              const proyeccion = isUva && uvaEfectivo
+                ? calcProyeccion(p, uvaEfectivo, CER_MENSUAL_DEFAULT, pageNum)
+                : [];
+              const totalUdas = p.capital_uva || 0;
+              const udasPagadas = history.reduce((s: number, pg: any) => s + (Number(pg.uva_equivalente) || 0), 0);
+              const saldoUdas = Math.max(0, Number(totalUdas) - udasPagadas);
+
+              return (
+                <div key={p.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                  {/* Main row */}
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    {/* Expand button */}
+                    <button onClick={() => togglePasivoHistory(p.id)}
+                      className="w-6 h-6 flex items-center justify-center rounded-lg flex-shrink-0 transition-all"
+                      style={{ background: isExpanded ? "rgba(108,99,255,0.20)" : "rgba(255,255,255,0.05)", color: isExpanded ? "#A5A0FF" : "rgba(255,255,255,0.35)" }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        {isExpanded ? <polyline points="18 15 12 9 6 15"/> : <polyline points="6 9 12 15 18 9"/>}
+                      </svg>
+                    </button>
+
+                    {/* Name & info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.90)" }}>{p.nombre}</p>
-                        {p.cuota_mensual && <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>Cuota: $ {Number(p.cuota_mensual).toLocaleString("es-AR")}/mes</p>}
-                        {p.fecha_vencimiento && <p className="text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>Vence: {p.fecha_vencimiento}</p>}
-                      </td>
-                      <td><span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.12)", color: "#EF4444" }}>{TIPO_PASIVO_LABELS[p.tipo] ?? p.tipo}</span></td>
-                      <td style={{ textAlign: "right", color: "rgba(255,255,255,0.60)" }} className="font-mono text-sm">
-                        {p.moneda === "USD" ? "U$S" : "$"} {Number(p.monto_original).toLocaleString("es-AR")}
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        <span className="font-mono text-sm font-bold" style={{ color: "#EF4444" }}>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.12)", color: "#EF4444" }}>{TIPO_PASIVO_LABELS[p.tipo] ?? p.tipo}</span>
+                        {isUva && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(108,99,255,0.15)", color: "#A5A0FF" }}>UVA</span>}
+                      </div>
+                      {p.fecha_vencimiento && <p className="text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>Vence: {p.fecha_vencimiento}</p>}
+                    </div>
+
+                    {/* UVA saldo or ARS saldo */}
+                    <div className="text-right flex-shrink-0">
+                      {isUva && p.capital_uva ? (
+                        <>
+                          <p className="font-mono text-sm font-bold" style={{ color: "#EF4444" }}>
+                            {uvaEfectivo
+                              ? `$ ${(saldoUdas * uvaEfectivo).toLocaleString("es-AR", { maximumFractionDigits: 0 })}`
+                              : `${saldoUdas.toLocaleString("es-AR", { maximumFractionDigits: 1 })} UVAs`
+                            }
+                          </p>
+                          <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                            {saldoUdas.toLocaleString("es-AR", { maximumFractionDigits: 1 })} UVAs de {Number(totalUdas).toLocaleString("es-AR", { maximumFractionDigits: 1 })}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="font-mono text-sm font-bold" style={{ color: "#EF4444" }}>
                           {p.moneda === "USD" ? "U$S" : "$"} {Number(p.saldo_pendiente).toLocaleString("es-AR")}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="text-xs font-bold" style={{ color: "#10B981" }}>{pct.toFixed(0)}%</span>
-                          <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
-                            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "#10B981" }} />
+                        </p>
+                      )}
+                      {/* Progress */}
+                      <div className="flex items-center gap-1.5 mt-1 justify-end">
+                        <div className="w-16 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: "#10B981" }} />
+                        </div>
+                        <span className="text-[10px] font-bold" style={{ color: "#10B981" }}>{pct.toFixed(0)}%</span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button onClick={() => { openPagoModal(p); if (isUva && !uvaEfectivo) fetchUva(); }}
+                        className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg"
+                        style={{ background: "rgba(16,185,129,0.12)", color: "#10B981" }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        Pago
+                      </button>
+                      <button onClick={() => openEditPasivo(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/5" style={{ color: "rgba(255,255,255,0.30)" }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                      <button onClick={() => handleDeletePasivo(p.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/5" style={{ color: "rgba(239,68,68,0.5)" }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Expanded: History + Projection */}
+                  {isExpanded && (
+                    <div className="px-4 pb-4 space-y-4" style={{ background: "rgba(0,0,0,0.15)" }}>
+
+                      {/* Payment History */}
+                      <div>
+                        <p className="text-xs font-semibold uppercase mb-2" style={{ color: "rgba(255,255,255,0.40)" }}>Historial de pagos</p>
+                        {historyLoading ? (
+                          <p className="text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>Cargando...</p>
+                        ) : history.length === 0 ? (
+                          <p className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>Sin pagos registrados aún.</p>
+                        ) : (
+                          <div className="space-y-1">
+                            {history.map((pg: any) => (
+                              <div key={pg.id} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2"
+                                style={{ background: "rgba(255,255,255,0.04)" }}>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.75)" }}>
+                                    {pg.fecha} · $ {Number(pg.monto_ars).toLocaleString("es-AR")}
+                                  </p>
+                                  {pg.uva_equivalente && (
+                                    <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                                      {Number(pg.uva_equivalente).toLocaleString("es-AR", { maximumFractionDigits: 2 })} UVAs
+                                      {pg.uva_valor ? ` · 1 UVA = $${Number(pg.uva_valor).toLocaleString("es-AR", { maximumFractionDigits: 2 })}` : ""}
+                                    </p>
+                                  )}
+                                  {pg.descripcion && <p className="text-[10px] truncate" style={{ color: "rgba(255,255,255,0.25)" }}>{pg.descripcion}</p>}
+                                </div>
+                                <button onClick={() => handleDeletePago(pg.id, p.id)}
+                                  className="w-6 h-6 flex items-center justify-center rounded-lg flex-shrink-0 hover:bg-red-500/10"
+                                  style={{ color: "rgba(239,68,68,0.5)" }}>
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                                </button>
+                              </div>
+                            ))}
                           </div>
+                        )}
+                      </div>
+
+                      {/* Installment Projection (UVA only) */}
+                      {isUva && p.capital_uva && p.cuota_uva && (
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs font-semibold uppercase" style={{ color: "rgba(255,255,255,0.40)" }}>
+                              Proyección de cuotas
+                              <span className="ml-1 font-normal normal-case" style={{ color: "rgba(255,255,255,0.25)" }}>
+                                (CER {(CER_MENSUAL_DEFAULT * 100).toFixed(0)}%/mes estimado)
+                              </span>
+                            </p>
+                            {!uvaEfectivo && (
+                              <button onClick={fetchUva} className="text-[10px] px-2 py-0.5 rounded" style={{ background: "rgba(108,99,255,0.20)", color: "#A5A0FF" }}>
+                                Traer UVA
+                              </button>
+                            )}
+                          </div>
+                          {uvaEfectivo ? (
+                            <>
+                              <div className="rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr style={{ background: "rgba(255,255,255,0.04)" }}>
+                                      <th className="px-3 py-1.5 text-left" style={{ color: "rgba(255,255,255,0.35)" }}>N°</th>
+                                      <th className="px-3 py-1.5 text-left" style={{ color: "rgba(255,255,255,0.35)" }}>Mes</th>
+                                      <th className="px-3 py-1.5 text-right" style={{ color: "rgba(255,255,255,0.35)" }}>UVA est.</th>
+                                      <th className="px-3 py-1.5 text-right" style={{ color: "rgba(255,255,255,0.35)" }}>Cuota ARS</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {proyeccion.map((c) => (
+                                      <tr key={c.nCuota} style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+                                        <td className="px-3 py-1.5 font-mono" style={{ color: "rgba(255,255,255,0.40)" }}>{c.nCuota}</td>
+                                        <td className="px-3 py-1.5" style={{ color: "rgba(255,255,255,0.60)" }}>{c.mesMostrar}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono" style={{ color: "rgba(255,255,255,0.45)" }}>${c.uvaVal.toLocaleString("es-AR", { maximumFractionDigits: 0 })}</td>
+                                        <td className="px-3 py-1.5 text-right font-mono font-semibold" style={{ color: "#A5A0FF" }}>${c.cuotaArs.toLocaleString("es-AR")}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <div className="flex items-center justify-between mt-2">
+                                <button
+                                  onClick={() => setProjPage(prev => ({ ...prev, [p.id]: Math.max(0, (prev[p.id] || 0) - 1) }))}
+                                  disabled={(projPage[p.id] || 0) === 0}
+                                  className="text-[10px] px-2 py-1 rounded-lg disabled:opacity-30"
+                                  style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.50)" }}>
+                                  ← Anteriores
+                                </button>
+                                <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.25)" }}>
+                                  Cuotas {(projPage[p.id] || 0) * 10 + 1}–{Math.min(Number(p.n_cuotas), (projPage[p.id] || 0) * 10 + 10)} de {p.n_cuotas}
+                                </span>
+                                <button
+                                  onClick={() => setProjPage(prev => ({ ...prev, [p.id]: (prev[p.id] || 0) + 1 }))}
+                                  disabled={((projPage[p.id] || 0) + 1) * 10 >= Number(p.n_cuotas)}
+                                  className="text-[10px] px-2 py-1 rounded-lg disabled:opacity-30"
+                                  style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.50)" }}>
+                                  Ver próximas 10 →
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <p className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>Necesitás el valor UVA actual para proyectar las cuotas.</p>
+                          )}
                         </div>
-                      </td>
-                      <td>
-                        <div className="flex items-center gap-1 justify-end">
-                          <button onClick={() => openPagoModal(p)}
-                            className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg transition-colors"
-                            style={{ background: "rgba(16,185,129,0.12)", color: "#10B981" }}
-                            title="Registrar pago">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                            Pago
-                          </button>
-                          <button onClick={() => openEditPasivo(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/5" style={{ color: "rgba(255,255,255,0.30)" }}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                          </button>
-                          <button onClick={() => handleDeletePasivo(p.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/5" style={{ color: "rgba(239,68,68,0.5)" }}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             <div className="px-5 py-3 flex items-center justify-between" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
               <p className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.50)" }}>Total deuda pendiente</p>
               <p className="font-mono font-bold" style={{ color: "#EF4444" }}>$ {totalPasivosARS.toLocaleString("es-AR", { maximumFractionDigits: 0 })}</p>
@@ -841,17 +1060,36 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                 </span>
               </div>
 
+              {/* UVA payment breakdown */}
+              {pagoTargetPasivo.sistema_amortizacion === "uva" && (
+                <div className="rounded-xl p-3 mb-2 space-y-1.5" style={{ background: "rgba(108,99,255,0.08)", border: "1px solid rgba(108,99,255,0.20)" }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold uppercase" style={{ color: "#A5A0FF" }}>Crédito UVA</span>
+                    {uvaEfectivo
+                      ? <span className="text-[10px] font-mono" style={{ color: "rgba(255,255,255,0.45)" }}>1 UVA = ${uvaEfectivo.toLocaleString("es-AR", { maximumFractionDigits: 2 })}</span>
+                      : <button type="button" onClick={fetchUva} className="text-[10px] px-2 py-0.5 rounded" style={{ background: "rgba(108,99,255,0.25)", color: "#A5A0FF" }}>Traer UVA</button>
+                    }
+                  </div>
+                  {uvaEfectivo && pagoTargetPasivo.cuota_uva && (
+                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
+                      Cuota sugerida: <strong style={{ color: "#A5A0FF" }}>$ {Math.round(pagoTargetPasivo.cuota_uva * uvaEfectivo).toLocaleString("es-AR")}</strong>
+                      <span style={{ color: "rgba(255,255,255,0.35)" }}> ({Number(pagoTargetPasivo.cuota_uva).toLocaleString("es-AR", { maximumFractionDigits: 2 })} UVAs)</span>
+                    </p>
+                  )}
+                  {pagoMonto && uvaEfectivo && parseFloat(pagoMonto) > 0 && (
+                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
+                      Este pago representa: <strong style={{ color: "#22D3EE" }}>{(parseFloat(pagoMonto) / uvaEfectivo).toLocaleString("es-AR", { maximumFractionDigits: 2 })} UVAs</strong>
+                    </p>
+                  )}
+                </div>
+              )}
+
               <form onSubmit={handleRegistrarPago} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Monto pagado *</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Monto pagado en ARS *</label>
                     <input type="number" className="input-field font-mono" placeholder="0" min="0" step="any"
                       value={pagoMonto} onChange={e => setPagoMonto(e.target.value)} onFocus={e => e.target.select()} required autoFocus />
-                    {pagoTargetPasivo.sistema_amortizacion === "uva" && uvaEfectivo && pagoTargetPasivo.cuota_uva && (
-                      <p className="text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.30)" }}>
-                        Cuota UVA estimada: $ {Math.round(pagoTargetPasivo.cuota_uva * uvaEfectivo).toLocaleString("es-AR")}
-                      </p>
-                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Fecha</label>

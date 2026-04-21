@@ -957,23 +957,44 @@ export async function deletePasivo(id: string) {
 
 export async function registrarPagoPasivo(
   pasivoId: string,
-  monto: number,
+  montoArs: number,
   fecha: string,
   cuentaId: string | null,
   descripcion: string,
   categoriaId: string | null,
+  uvaValor?: number | null,
 ) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  // Create the movement
-  const { error: movError } = await supabase
+  // Calculate UVA equivalent if UVA value provided
+  const uvaEquivalente = uvaValor && uvaValor > 0 ? montoArs / uvaValor : null;
+
+  // 1. Store the payment in pagos_pasivos
+  const { error: pagoError } = await supabase
+    .from("pagos_pasivos")
+    .insert({
+      pasivo_id: pasivoId,
+      usuario_id: user.id,
+      fecha,
+      monto_ars: montoArs,
+      uva_valor: uvaValor ?? null,
+      uva_equivalente: uvaEquivalente,
+      descripcion,
+      cuenta_id: cuentaId,
+      categoria_id: categoriaId,
+    });
+
+  if (pagoError) throw pagoError;
+
+  // 2. Create the movement (expense)
+  await supabase
     .from("movimientos")
     .insert({
       usuario_id: user.id,
       tipo: "gasto",
-      monto,
+      monto: montoArs,
       moneda: "ARS",
       fecha,
       descripcion,
@@ -981,22 +1002,100 @@ export async function registrarPagoPasivo(
       categoria_id: categoriaId,
     });
 
-  if (movError) throw movError;
-
-  // Reduce saldo_pendiente
+  // 3. Recalculate saldo_pendiente from all payments
   const { data: pasivo } = await supabase
     .from("pasivos")
-    .select("saldo_pendiente")
+    .select("monto_original, capital_uva, sistema_amortizacion")
     .eq("id", pasivoId)
     .eq("usuario_id", user.id)
     .single();
 
   if (pasivo) {
-    const nuevo = Math.max(0, Number(pasivo.saldo_pendiente) - monto);
-    await supabase.from("pasivos").update({ saldo_pendiente: nuevo }).eq("id", pasivoId);
+    const { data: pagos } = await supabase
+      .from("pagos_pasivos")
+      .select("monto_ars, uva_equivalente")
+      .eq("pasivo_id", pasivoId);
+
+    let nuevoSaldo: number;
+    if (pasivo.sistema_amortizacion === "uva" && pasivo.capital_uva && uvaValor && uvaValor > 0) {
+      // For UVA loans: track in UVAs, convert back to ARS at current rate
+      const totalUvasPagadas = (pagos || []).reduce((sum: number, p: any) => sum + (Number(p.uva_equivalente) || 0), 0);
+      const saldoUdas = Math.max(0, Number(pasivo.capital_uva) - totalUvasPagadas);
+      nuevoSaldo = saldoUdas * uvaValor;
+    } else {
+      // For regular loans: simple ARS sum
+      const totalPagado = (pagos || []).reduce((sum: number, p: any) => sum + Number(p.monto_ars), 0);
+      nuevoSaldo = Math.max(0, Number(pasivo.monto_original) - totalPagado);
+    }
+
+    await supabase.from("pasivos").update({ saldo_pendiente: nuevoSaldo }).eq("id", pasivoId);
   }
 
   revalidatePath("/app/cartera");
   revalidatePath("/app/movimientos");
   revalidatePath("/app/dashboard");
 }
+
+export async function getPagosPasivo(pasivoId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("pagos_pasivos")
+    .select("*, cuentas(nombre), categorias(nombre)")
+    .eq("pasivo_id", pasivoId)
+    .eq("usuario_id", user.id)
+    .order("fecha", { ascending: false });
+
+  return data || [];
+}
+
+export async function deletePagoPasivo(
+  pagoId: string,
+  pasivoId: string,
+  uvaValorActual?: number | null,
+) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  // Delete the payment
+  const { error } = await supabase
+    .from("pagos_pasivos")
+    .delete()
+    .eq("id", pagoId)
+    .eq("usuario_id", user.id);
+
+  if (error) throw error;
+
+  // Recalculate saldo_pendiente from remaining payments
+  const { data: pasivo } = await supabase
+    .from("pasivos")
+    .select("monto_original, capital_uva, sistema_amortizacion")
+    .eq("id", pasivoId)
+    .eq("usuario_id", user.id)
+    .single();
+
+  if (pasivo) {
+    const { data: pagos } = await supabase
+      .from("pagos_pasivos")
+      .select("monto_ars, uva_equivalente")
+      .eq("pasivo_id", pasivoId);
+
+    let nuevoSaldo: number;
+    if (pasivo.sistema_amortizacion === "uva" && pasivo.capital_uva && uvaValorActual && uvaValorActual > 0) {
+      const totalUvasPagadas = (pagos || []).reduce((sum: number, p: any) => sum + (Number(p.uva_equivalente) || 0), 0);
+      const saldoUdas = Math.max(0, Number(pasivo.capital_uva) - totalUvasPagadas);
+      nuevoSaldo = saldoUdas * uvaValorActual;
+    } else {
+      const totalPagado = (pagos || []).reduce((sum: number, p: any) => sum + Number(p.monto_ars), 0);
+      nuevoSaldo = Math.max(0, Number(pasivo.monto_original) - totalPagado);
+    }
+
+    await supabase.from("pasivos").update({ saldo_pendiente: nuevoSaldo }).eq("id", pasivoId);
+  }
+
+  revalidatePath("/app/cartera");
+}
+

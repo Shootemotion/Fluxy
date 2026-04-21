@@ -488,7 +488,15 @@ select.input-field option {
 }
 
 .light body,
-.light html { background: #F0F2F8; color: rgba(0,0,0,0.88); }
+.light html,
+html.light,
+html.light body { background: #F0F2F8; color: rgba(0,0,0,0.88); }
+
+/* Universal color inheritance — elements get dark text from the html root */
+.light p, .light h1, .light h2, .light h3, .light h4,
+.light label, .light td, .light th, .light li {
+  color: inherit;
+}
 
 .light .glass-card,
 .light .glass-card-hover {
@@ -572,21 +580,64 @@ select.input-field option {
 }
 .light .recharts-legend-item-text { color: rgba(0,0,0,0.65) !important; }
 
-/* ── Inline-style color overrides ────────────────────────────────────────────
-   These cover components that still use hardcoded rgba() inline styles.
-   Two selectors per alpha level: with and without trailing zero.
+/* ── Inline-style overrides for light mode ───────────────────────────────────
+   React serializes rgba() WITH spaces: rgba(255, 255, 255, 0.9)
+   So we need both formats (with and without spaces) for every value.
    ──────────────────────────────────────────────────────────────────────────── */
-/* Text colors: white-on-dark → dark-on-light */
-.light [style*="color: rgba(255,255,255"] { color: var(--fg-1) !important; }
-/* More specific overrides win (listed after the catch-all) */
-.light [style*="color: rgba(255,255,255,0.9"]  { color: var(--fg-1) !important; }
-.light [style*="color: rgba(255,255,255,0.7"]  { color: var(--fg-3) !important; }
-.light [style*="color: rgba(255,255,255,0.5"]  { color: var(--fg-4) !important; }
-.light [style*="color: rgba(255,255,255,0.4"]  { color: var(--fg-5) !important; }
-.light [style*="color: rgba(255,255,255,0.3"]  { color: var(--fg-6) !important; }
-.light [style*="color: rgba(255,255,255,0.2"]  { color: var(--fg-7) !important; }
 
-/* Dark card/panel backgrounds → white */
+/* Text: white-alpha → dark equivalents (both space variants) */
+.light [style*="color: rgba(255,255,255,0.95)"],
+.light [style*="color: rgba(255, 255, 255, 0.95)"] { color: rgba(0,0,0,0.88) !important; }
+.light [style*="color: rgba(255,255,255,0.90)"],
+.light [style*="color: rgba(255, 255, 255, 0.90)"],
+.light [style*="color: rgba(255,255,255,0.9)"],
+.light [style*="color: rgba(255, 255, 255, 0.9)"]  { color: rgba(0,0,0,0.82) !important; }
+.light [style*="color: rgba(255,255,255,0.85)"],
+.light [style*="color: rgba(255, 255, 255, 0.85)"] { color: rgba(0,0,0,0.78) !important; }
+.light [style*="color: rgba(255,255,255,0.80)"],
+.light [style*="color: rgba(255, 255, 255, 0.80)"],
+.light [style*="color: rgba(255,255,255,0.8)"],
+.light [style*="color: rgba(255, 255, 255, 0.8)"]  { color: rgba(0,0,0,0.72) !important; }
+.light [style*="color: rgba(255,255,255,0.70)"],
+.light [style*="color: rgba(255, 255, 255, 0.70)"],
+.light [style*="color: rgba(255,255,255,0.7)"],
+.light [style*="color: rgba(255, 255, 255, 0.7)"]  { color: rgba(0,0,0,0.60) !important; }
+.light [style*="color: rgba(255,255,255,0.65)"],
+.light [style*="color: rgba(255, 255, 255, 0.65)"] { color: rgba(0,0,0,0.55) !important; }
+.light [style*="color: rgba(255,255,255,0.60)"],
+.light [style*="color: rgba(255, 255, 255, 0.60)"],
+.light [style*="color: rgba(255,255,255,0.6)"],
+.light [style*="color: rgba(255, 255, 255, 0.6)"]  { color: rgba(0,0,0,0.50) !important; }
+.light [style*="color: rgba(255,255,255,0.50)"],
+.light [style*="color: rgba(255, 255, 255, 0.50)"],
+.light [style*="color: rgba(255,255,255,0.5)"],
+.light [style*="color: rgba(255, 255, 255, 0.5)"]  { color: rgba(0,0,0,0.42) !important; }
+.light [style*="color: rgba(255,255,255,0.45)"],
+.light [style*="color: rgba(255, 255, 255, 0.45)"] { color: rgba(0,0,0,0.38) !important; }
+.light [style*="color: rgba(255,255,255,0.40)"],
+.light [style*="color: rgba(255, 255, 255, 0.40)"],
+.light [style*="color: rgba(255,255,255,0.4)"],
+.light [style*="color: rgba(255, 255, 255, 0.4)"]  { color: rgba(0,0,0,0.35) !important; }
+.light [style*="color: rgba(255,255,255,0.38)"],
+.light [style*="color: rgba(255, 255, 255, 0.38)"] { color: rgba(0,0,0,0.32) !important; }
+.light [style*="color: rgba(255,255,255,0.35)"],
+.light [style*="color: rgba(255, 255, 255, 0.35)"] { color: rgba(0,0,0,0.28) !important; }
+.light [style*="color: rgba(255,255,255,0.30)"],
+.light [style*="color: rgba(255, 255, 255, 0.30)"],
+.light [style*="color: rgba(255,255,255,0.3)"],
+.light [style*="color: rgba(255, 255, 255, 0.3)"]  { color: rgba(0,0,0,0.24) !important; }
+.light [style*="color: rgba(255,255,255,0.28)"],
+.light [style*="color: rgba(255, 255, 255, 0.28)"] { color: rgba(0,0,0,0.22) !important; }
+.light [style*="color: rgba(255,255,255,0.25)"],
+.light [style*="color: rgba(255, 255, 255, 0.25)"] { color: rgba(0,0,0,0.20) !important; }
+.light [style*="color: rgba(255,255,255,0.22)"],
+.light [style*="color: rgba(255, 255, 255, 0.22)"] { color: rgba(0,0,0,0.18) !important; }
+.light [style*="color: rgba(255,255,255,0.20)"],
+.light [style*="color: rgba(255, 255, 255, 0.20)"],
+.light [style*="color: rgba(255,255,255,0.2)"],
+.light [style*="color: rgba(255, 255, 255, 0.2)"]  { color: rgba(0,0,0,0.16) !important; }
+
+/* Dark card/panel backgrounds → white (both space variants) */
 .light [style*="background: rgba(30,30,46"],
 .light [style*="background: rgba(30, 30, 46"],
 .light [style*="background: rgba(20,20,38"],
@@ -600,14 +651,18 @@ select.input-field option {
   border-color: var(--bd) !important;
 }
 
-/* Faint white overlays (hover/tab strip) → faint dark */
+/* Faint white overlays → faint dark (both space variants) */
 .light [style*="background: rgba(255,255,255,0.04)"],
+.light [style*="background: rgba(255, 255, 255, 0.04)"],
 .light [style*="background: rgba(255,255,255,0.05)"],
-.light [style*="background: rgba(255,255,255,0.06)"] { background: var(--bg-faint) !important; }
+.light [style*="background: rgba(255, 255, 255, 0.05)"],
+.light [style*="background: rgba(255,255,255,0.06)"],
+.light [style*="background: rgba(255, 255, 255, 0.06)"] { background: var(--bg-faint) !important; }
 
-/* White-alpha borders → dark borders */
+/* White-alpha borders → dark borders (both space variants) */
 .light [style*="border: 1px solid rgba(255,255,255"],
+.light [style*="border: 1px solid rgba(255, 255, 255"],
 .light [style*="border-top: 1px solid rgba(255,255,255"],
+.light [style*="border-top: 1px solid rgba(255, 255, 255"],
 .light [style*="border-bottom: 1px solid rgba(255,255,255"],
-.light [style*="borderTop: "], .light [style*="borderBottom: "] { border-color: var(--bd) !important; }
-
+.light [style*="border-bottom: 1px solid rgba(255, 255, 255"] { border-color: var(--bd) !important; }
