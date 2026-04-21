@@ -141,8 +141,8 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>Objetivos de Ahorro</h1>
-          <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.38)" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--fg-hi)" }}>Objetivos de Ahorro</h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--fg-6)" }}>
             {goals.length} meta{goals.length !== 1 ? "s" : ""} activa{goals.length !== 1 ? "s" : ""}
           </p>
         </div>
@@ -154,9 +154,9 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
         <div className="glass-card p-5" style={{ background: "linear-gradient(135deg, rgba(108,99,255,0.10), rgba(34,211,238,0.06))", borderColor: "rgba(108,99,255,0.18)" }}>
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.35)" }}>Progreso global</p>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--fg-6)" }}>Progreso global</p>
               <p className="text-2xl font-bold gradient-text">{formatCurrency(totalActual, "ARS", true)}</p>
-              <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.38)" }}>de {formatCurrency(totalObjetivo, "ARS", true)} meta total</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--fg-6)" }}>de {formatCurrency(totalObjetivo, "ARS", true)} meta total</p>
             </div>
             <p className="text-4xl font-bold" style={{ color: getProgressColor(pctGlobal) }}>
               {pctGlobal.toFixed(0)}%
@@ -171,8 +171,8 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
       {goals.length === 0 ? (
         <div className="glass-card p-16 text-center">
           <p className="text-5xl mb-4">🎯</p>
-          <h3 className="text-lg font-semibold mb-2" style={{ color: "rgba(255,255,255,0.9)" }}>¿Cuál es tu próxima meta?</h3>
-          <p className="text-sm max-w-sm mx-auto mb-8" style={{ color: "rgba(255,255,255,0.40)" }}>
+          <h3 className="text-lg font-semibold mb-2" style={{ color: "var(--fg-1)" }}>¿Cuál es tu próxima meta?</h3>
+          <p className="text-sm max-w-sm mx-auto mb-8" style={{ color: "var(--fg-4)" }}>
             Definí un fondo de emergencia, tus vacaciones soñadas o el auto que querés.
           </p>
           <button onClick={openCreate} className="btn-primary mx-auto">Empezar a ahorrar</button>
@@ -196,7 +196,7 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
                       {obj.icono || "🎯"}
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-semibold text-base truncate" style={{ color: "rgba(255,255,255,0.95)" }}>{obj.nombre}</h3>
+                      <h3 className="font-semibold text-base truncate" style={{ color: "var(--fg-hi)" }}>{obj.nombre}</h3>
                       <span className={`badge ${cfg.badge} text-[10px] mt-1`}>{cfg.label}</span>
                     </div>
                   </div>
@@ -229,7 +229,7 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
                 {/* Barra de progreso */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm" style={{ color: "rgba(255,255,255,0.50)" }}>Progreso</span>
+                    <span className="text-sm" style={{ color: "var(--fg-5)" }}>Progreso</span>
                     <span className="text-xl font-bold" style={{ color }}>{pct.toFixed(1)}%</span>
                   </div>
                   <div className="progress-bar h-2.5">
@@ -240,21 +240,21 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
                 {/* Stats grid */}
                 <div className="grid grid-cols-3 gap-2 pt-1">
                   <div className="rounded-xl p-3 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
-                    <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "rgba(255,255,255,0.30)" }}>Tengo</p>
+                    <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "var(--fg-7)" }}>Tengo</p>
                     <p className="text-sm font-bold text-emerald-400">{formatCurrency(obj.saldo_actual, "ARS", true)}</p>
                   </div>
                   <div className="rounded-xl p-3 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
-                    <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "rgba(255,255,255,0.30)" }}>Faltan</p>
-                    <p className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.80)" }}>{formatCurrency(faltan, "ARS", true)}</p>
+                    <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "var(--fg-7)" }}>Faltan</p>
+                    <p className="text-sm font-bold" style={{ color: "var(--fg-2)" }}>{formatCurrency(faltan, "ARS", true)}</p>
                   </div>
                   <div className="rounded-xl p-3 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
-                    <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "rgba(255,255,255,0.30)" }}>Meta</p>
-                    <p className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.80)" }}>{formatCurrency(obj.monto_objetivo, "ARS", true)}</p>
+                    <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "var(--fg-7)" }}>Meta</p>
+                    <p className="text-sm font-bold" style={{ color: "var(--fg-2)" }}>{formatCurrency(obj.monto_objetivo, "ARS", true)}</p>
                   </div>
                 </div>
 
                 {obj.fecha_meta && (
-                  <p className="text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
+                  <p className="text-xs" style={{ color: "var(--fg-7)" }}>
                     📅 Meta: {new Date(obj.fecha_meta).toLocaleDateString("es-AR", { month: "long", year: "numeric" })}
                   </p>
                 )}
@@ -270,27 +270,27 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
           <div className="glass-card w-full max-w-md animate-slide-up" style={{ maxHeight: "90vh", overflowY: "auto" }}>
             <div className="p-6">
               <div className="flex items-start justify-between mb-1">
-                <h2 className="text-xl font-bold" style={{ color: "rgba(255,255,255,0.9)" }}>
+                <h2 className="text-xl font-bold" style={{ color: "var(--fg-1)" }}>
                   {editingId ? "Editar objetivo" : "Nuevo objetivo de ahorro"}
                 </h2>
                 <button
                   type="button"
                   onClick={() => { setShowModal(false); resetForm(); }}
                   className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 flex-shrink-0 ml-2"
-                  style={{ color: "rgba(255,255,255,0.35)" }}
+                  style={{ color: "var(--fg-6)" }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
                 </button>
               </div>
-              <p className="text-sm mb-6" style={{ color: "rgba(255,255,255,0.38)" }}>
+              <p className="text-sm mb-6" style={{ color: "var(--fg-6)" }}>
                 {editingId ? "Modificá los datos de tu meta" : "Definí tu próxima meta financiera"}
               </p>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-4)" }}>
                     ¿Para qué querés ahorrar? *
                   </label>
                   <input type="text" className="input-field"
@@ -300,13 +300,13 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Monto meta (ARS) *</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-4)" }}>Monto meta (ARS) *</label>
                     <input type="number" className="input-field" placeholder="0"
                       value={monto} onChange={e => setMonto(e.target.value)}
                       onFocus={e => e.target.select()} required />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Fecha meta</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-4)" }}>Fecha meta</label>
                     <input type="date" className="input-field"
                       value={fecha} onChange={e => setFecha(e.target.value)} />
                   </div>
@@ -314,7 +314,7 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Icono</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-4)" }}>Icono</label>
                     <select className="input-field" value={icono} onChange={e => setIcono(e.target.value)}>
                       {ICONOS.map(i => (
                         <option key={i.value} value={i.value}>{i.value} {i.label}</option>
@@ -322,7 +322,7 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Prioridad</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-4)" }}>Prioridad</label>
                     <select className="input-field" value={prioridad} onChange={e => setPrioridad(e.target.value)}>
                       <option value="baja">Baja</option>
                       <option value="media">Media</option>
@@ -359,14 +359,14 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
           <div className="glass-card w-full max-w-sm animate-slide-up p-6">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-xl font-bold" style={{ color: "rgba(255,255,255,0.9)" }}>Agregar aporte</h2>
-                <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                <h2 className="text-xl font-bold" style={{ color: "var(--fg-1)" }}>Agregar aporte</h2>
+                <p className="text-sm mt-0.5" style={{ color: "var(--fg-4)" }}>
                   {aportarGoal.icono} {aportarGoal.nombre}
                 </p>
               </div>
               <button onClick={() => setAportarGoal(null)}
                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5"
-                style={{ color: "rgba(255,255,255,0.35)" }}>
+                style={{ color: "var(--fg-6)" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
@@ -375,7 +375,7 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
 
             <div className="rounded-xl p-3 mb-4 flex items-center justify-between"
               style={{ background: "rgba(255,255,255,0.04)" }}>
-              <span className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }}>Saldo actual</span>
+              <span className="text-xs" style={{ color: "var(--fg-4)" }}>Saldo actual</span>
               <span className="font-mono font-bold text-sm text-emerald-400">
                 {formatCurrency(aportarGoal.saldo_actual, "ARS", true)}
               </span>
@@ -383,7 +383,7 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-4)" }}>
                   Monto a aportar (ARS) *
                 </label>
                 <input
@@ -398,7 +398,7 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-4)" }}>
                   Sale de la cuenta *
                 </label>
                 <select

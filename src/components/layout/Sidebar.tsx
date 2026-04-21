@@ -93,7 +93,7 @@ export default function Sidebar() {
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="ml-auto p-1 rounded-lg hover:bg-white/5 transition-colors"
-          style={{ color: "rgba(255,255,255,0.3)" }}
+          style={{ color: "var(--fg-6)" }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             {collapsed ? <path d="M9 18l6-6-6-6"/> : <path d="M15 18l-6-6 6-6"/>}
@@ -107,7 +107,7 @@ export default function Sidebar() {
       {/* Main Nav */}
       <nav className="flex-1 py-2 space-y-0.5">
         {!collapsed && (
-          <p className="px-5 pb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.25)" }}>
+          <p className="px-5 pb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--fg-7)" }}>
             Principal
           </p>
         )}
@@ -122,7 +122,7 @@ export default function Sidebar() {
         })}
 
         {!collapsed && (
-          <p className="px-5 pt-4 pb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.25)" }}>
+          <p className="px-5 pt-4 pb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--fg-7)" }}>
             Más
           </p>
         )}
@@ -140,7 +140,7 @@ export default function Sidebar() {
 
       {/* Bottom: User logout */}
       <div className="p-4 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
-        <button onClick={handleSignOut} className="sidebar-item w-full" style={{ color: "rgba(255,255,255,0.35)" }}>
+        <button onClick={handleSignOut} className="sidebar-item w-full" style={{ color: "var(--fg-6)" }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
             <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>

@@ -57,10 +57,10 @@ function KpiCard({
       <div className="flex items-start justify-between mb-3">
         <span className="text-2xl">{icon}</span>
       </div>
-      <p className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: "rgba(255,255,255,0.4)" }}>
+      <p className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: "var(--fg-5)" }}>
         {label}
       </p>
-      <p className="text-2xl font-bold leading-tight" style={{ color: "rgba(255,255,255,0.95)" }}>
+      <p className="text-2xl font-bold leading-tight" style={{ color: "var(--fg-hi)" }}>
         {displayValue}
       </p>
     </div>
@@ -123,11 +123,11 @@ export default function DashboardClient({
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--fg-hi)" }}>
             Hola, {userNombre} 👋
           </h1>
-          <p className="text-sm capitalize mt-0.5" style={{ color: "rgba(255,255,255,0.40)" }}>
-            {monthName} · Resumen real
+          <p className="text-sm capitalize mt-0.5" style={{ color: "var(--fg-4)" }}>
+            {monthName} · Resumen de patrimonio
           </p>
         </div>
         <Link href="/app/movimientos/nuevo" className="btn-primary hidden sm:flex">
@@ -152,31 +152,52 @@ export default function DashboardClient({
         style={{ background: "linear-gradient(135deg, rgba(108,99,255,0.10), rgba(34,211,238,0.06))", borderColor: "rgba(108,99,255,0.2)" }}
       >
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.35)" }}>
-            Balance total acumulado
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "var(--fg-5)" }}>
+            Patrimonio Neto Total
           </p>
           <p className="text-3xl font-bold gradient-text">{formatCurrency(stats.totalBalance, "ARS", true)}</p>
+          
+          <div className="flex gap-4 mt-2 flex-wrap">
+             <div className="flex items-center gap-1.5 opacity-80">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="text-[10px] font-medium" style={{ color: "var(--fg-3)" }}>
+                  Activos: {formatCurrency((stats.assets?.accounts || 0) + (stats.assets?.investments || 0) + (stats.assets?.physical || 0) + (stats.assets?.fixedDeposits || 0), "ARS", true)}
+                </span>
+             </div>
+             <div className="flex items-center gap-1.5 opacity-80">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                <span className="text-[10px] font-medium" style={{ color: "var(--fg-3)" }}>
+                  Pasivos: {formatCurrency(stats.liabilities || 0, "ARS", true)}
+                </span>
+             </div>
+          </div>
         </div>
-        <div className="hidden sm:flex items-center gap-6 text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>
-          <div className="text-center">
-            <p className="text-[11px] uppercase tracking-wider mb-0.5">Tasa gasto</p>
-            <p className="font-bold text-rose-400">
-              {stats.ingresos > 0 ? ((stats.gastos / stats.ingresos) * 100).toFixed(1) : 0}%
-            </p>
-          </div>
-          <div className="w-px h-8" style={{ background: "rgba(255,255,255,0.08)" }} />
-          <div className="text-center">
-            <p className="text-[11px] uppercase tracking-wider mb-0.5">Tasa ahorro</p>
-            <p className="font-bold text-emerald-400">{tasaAhorro.toFixed(1)}%</p>
-          </div>
+
+        <div className="hidden lg:grid grid-cols-2 gap-x-6 gap-y-1 text-right">
+            <div className="flex justify-between gap-4 text-[10px]">
+              <span style={{ color: "var(--fg-5)" }}>Cuentas</span>
+              <span className="font-mono font-semibold" style={{ color: "var(--fg-2)" }}>{formatCurrency(stats.assets?.accounts || 0, "ARS", true)}</span>
+            </div>
+            <div className="flex justify-between gap-4 text-[10px]">
+              <span style={{ color: "var(--fg-5)" }}>Inversiones</span>
+              <span className="font-mono font-semibold" style={{ color: "var(--fg-2)" }}>{formatCurrency(stats.assets?.investments || 0, "ARS", true)}</span>
+            </div>
+            <div className="flex justify-between gap-4 text-[10px]">
+              <span style={{ color: "var(--fg-5)" }}>Activos físicos</span>
+              <span className="font-mono font-semibold" style={{ color: "var(--fg-2)" }}>{formatCurrency(stats.assets?.physical || 0, "ARS", true)}</span>
+            </div>
+            <div className="flex justify-between gap-4 text-[10px]">
+              <span style={{ color: "var(--fg-5)" }}>Plazos Fijos</span>
+              <span className="font-mono font-semibold" style={{ color: "#F59E0B" }}>{formatCurrency(stats.assets?.fixedDeposits || 0, "ARS", true)}</span>
+            </div>
         </div>
       </div>
 
       {!hasData ? (
         <div className="glass-card p-12 text-center my-4">
           <p className="text-5xl mb-4">🚀</p>
-          <h2 className="text-xl font-bold mb-2" style={{ color: "rgba(255,255,255,0.9)" }}>¡Empezamos con Fluxy!</h2>
-          <p className="text-sm max-w-md mx-auto mb-8" style={{ color: "rgba(255,255,255,0.40)" }}>
+          <h2 className="text-xl font-bold mb-2" style={{ color: "var(--fg-1)" }}>¡Empezamos con Fluxy!</h2>
+          <p className="text-sm max-w-md mx-auto mb-8" style={{ color: "var(--fg-4)" }}>
             Tu base de datos está lista pero todavía no cargaste movimientos.
             Empezá agregando tu sueldo, un gasto o vinculando una cuenta.
           </p>
@@ -202,7 +223,7 @@ export default function DashboardClient({
                       {HIST_OPTIONS.map(n => (
                         <button key={n} onClick={() => setHistRange(n)}
                           className="px-2.5 py-1.5 text-xs font-medium transition-all"
-                          style={{ background: histRange === n ? "#6C63FF" : "transparent", color: histRange === n ? "white" : "rgba(255,255,255,0.40)" }}>
+                          style={{ background: histRange === n ? "#6C63FF" : "transparent", color: histRange === n ? "white" : "var(--fg-4)" }}>
                           {HIST_LABELS[n]}
                         </button>
                       ))}
@@ -215,7 +236,7 @@ export default function DashboardClient({
                       {FUT_OPTIONS.map(n => (
                         <button key={n} onClick={() => setFutureRange(n)}
                           className="px-2.5 py-1.5 text-xs font-medium transition-all"
-                          style={{ background: futureRange === n ? "rgba(34,211,238,0.5)" : "transparent", color: futureRange === n ? "white" : "rgba(255,255,255,0.40)" }}>
+                          style={{ background: futureRange === n ? "rgba(34,211,238,0.5)" : "transparent", color: futureRange === n ? "white" : "var(--fg-4)" }}>
                           {FUT_LABELS[n]}
                         </button>
                       ))}
@@ -278,7 +299,7 @@ export default function DashboardClient({
             {/* Movimientos recientes */}
             <div className="glass-card p-6 lg:col-span-2">
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-base font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>
+                <h2 className="text-base font-semibold" style={{ color: "var(--fg-1)" }}>
                   Movimientos recientes
                 </h2>
                 <Link href="/app/movimientos" className="text-xs font-medium" style={{ color: "#6C63FF" }}>
@@ -296,7 +317,7 @@ export default function DashboardClient({
                       <p className="text-sm font-medium truncate" style={{ color: "rgba(255,255,255,0.9)" }}>
                         {m.descripcion || "Sin descripción"}
                       </p>
-                      <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.38)" }}>
+                      <p className="text-xs mt-0.5 truncate" style={{ color: "var(--fg-5)" }}>
                         {m.fecha} · {m.categorias?.nombre || "Otros"}
                       </p>
                     </div>
@@ -311,7 +332,7 @@ export default function DashboardClient({
             {/* Objetivos */}
             <div className="glass-card p-6">
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-base font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>Mis Objetivos</h2>
+                <h2 className="text-base font-semibold" style={{ color: "var(--fg-1)" }}>Mis Objetivos</h2>
                 <Link href="/app/objetivos" className="text-xs font-medium" style={{ color: "#6C63FF" }}>
                   Ver todos →
                 </Link>

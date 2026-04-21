@@ -467,6 +467,8 @@ export async function getDashboardStats() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
+  const TC_REF = 1250; // Reference dollar rate
+
   const now = new Date();
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   
@@ -481,21 +483,62 @@ export async function getDashboardStats() {
   const gastos = movements?.filter(m => m.tipo === 'gasto').reduce((s, m) => s + Number(m.monto), 0) || 0;
   const ahorro = ingresos - gastos;
   
-  // Account balances (Total ARS equivalent)
+  // 1. Account balances (Total ARS equivalent)
   const { data: accounts } = await supabase
     .from("cuentas")
     .select("moneda, saldo_inicial")
     .eq("usuario_id", user.id);
+  const accountsArs = accounts?.reduce((s, a) => s + (a.moneda === "USD" ? Number(a.saldo_inicial) * TC_REF : Number(a.saldo_inicial)), 0) || 0;
 
-  // Note: For real app, we'd fetch exchange rate here
-  const totalBalance = accounts?.reduce((s, a) => s + Number(a.saldo_inicial), 0) || 0;
+  // 2. Positions (Investments)
+  const { data: pos } = await supabase
+    .from("posiciones")
+    .select("moneda, monto_valorizado")
+    .eq("usuario_id", user.id);
+  const posArs = pos?.reduce((s, p) => s + (p.moneda === "USD" ? Number(p.monto_valorizado) * TC_REF : Number(p.monto_valorizado)), 0) || 0;
+
+  // 3. Valuations (Actual physical assets)
+  const { data: vals } = await supabase
+    .from("valuaciones")
+    .select("moneda, valor")
+    .eq("usuario_id", user.id)
+    .eq("es_ultima", true);
+  const valsArs = vals?.reduce((s, v) => s + (v.moneda === "USD" ? Number(v.valor) * TC_REF : Number(v.valor)), 0) || 0;
+
+  // 4. Plazos Fijos
+  const { data: pfs } = await supabase
+    .from("plazos_fijos")
+    .select("monto_inicial, tasa_tna, plazo_dias, moneda")
+    .eq("usuario_id", user.id);
+  const pfsArs = (pfs || []).reduce((acc, pf) => {
+    const ganancia = Number(pf.monto_inicial) * (Number(pf.tasa_tna) / 100) * (Number(pf.plazo_dias) / 365);
+    const totalArs = (Number(pf.monto_inicial) + ganancia) * (pf.moneda === "USD" ? TC_REF : 1);
+    return acc + totalArs;
+  }, 0);
+
+  // 5. Liabilities (Pasivos)
+  const { data: pasivos } = await supabase
+    .from("pasivos")
+    .select("moneda, saldo_pendiente, saldo_ars")
+    .eq("usuario_id", user.id);
+  const pasivosArs = pasivos?.reduce((s, p) => s + (p.moneda === "USD" ? Number(p.saldo_ars) : Number(p.saldo_pendiente)), 0) || 0;
+
+  const totalAssets = accountsArs + posArs + valsArs + pfsArs;
+  const netWorth = totalAssets - pasivosArs;
 
   return {
     ingresos,
     gastos,
     ahorro,
     tasaAhorro: ingresos > 0 ? (ahorro / ingresos) * 100 : 0,
-    totalBalance
+    totalBalance: netWorth, // Primary dashboard figure is now Net Worth
+    assets: {
+      accounts: accountsArs,
+      investments: posArs,
+      physical: valsArs,
+      fixedDeposits: pfsArs
+    },
+    liabilities: pasivosArs
   };
 }
 
