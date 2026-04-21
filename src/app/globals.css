@@ -1,0 +1,613 @@
+@import "tailwindcss";
+
+/* ─── Tema de colores ─────────────────────────────────────────────────────── */
+@theme {
+  --color-primary: #6C63FF;
+  --color-secondary: #22D3EE;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+}
+
+/* ─── Variables CSS ───────────────────────────────────────────────────────── */
+:root {
+  --bg: #0F0F1A;
+  --bg-secondary: #1A1A2E;
+  --bg-card: #1E1E2E;
+  --bg-hover: #252535;
+  --border: rgba(255,255,255,0.08);
+  --border-hover: rgba(255,255,255,0.15);
+  --primary: #6C63FF;
+  --secondary: #22D3EE;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --text-primary: rgba(255,255,255,0.95);
+  --text-secondary: rgba(255,255,255,0.60);
+  --text-muted: rgba(255,255,255,0.35);
+  --sidebar-width: 240px;
+}
+
+/* ─── Base layer ──────────────────────────────────────────────────────────── */
+/*
+  CRITICAL: El reset de padding/margin DEBE estar en @layer base para que
+  las utilidades de Tailwind (@layer utilities) puedan sobreescribirlo.
+  Si está fuera de @layer, los estilos sin capa ganan sobre todos los
+  layered-styles, rompiendo p-4, m-4, space-y-6, etc.
+*/
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--bg);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+}
+
+/* ─── Glass card ──────────────────────────────────────────────────────────── */
+.glass-card {
+  background: rgba(30, 30, 46, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+}
+
+.glass-card-hover {
+  background: rgba(30, 30, 46, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.glass-card-hover:hover {
+  border-color: rgba(108,99,255,0.35);
+  background: rgba(37, 37, 62, 0.9);
+  box-shadow: 0 4px 24px rgba(108,99,255,0.15);
+  transform: translateY(-1px);
+}
+
+/* ─── Gradient text ───────────────────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #6C63FF, #22D3EE);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-success {
+  background: linear-gradient(135deg, #10B981, #22D3EE);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Glow effects ────────────────────────────────────────────────────────── */
+.glow-primary { box-shadow: 0 0 20px rgba(108,99,255,0.25), 0 0 1px rgba(108,99,255,0.5); }
+.glow-success { box-shadow: 0 0 20px rgba(16,185,129,0.20); }
+.glow-danger  { box-shadow: 0 0 20px rgba(239,68,68,0.20); }
+
+/* ─── Progress bar ────────────────────────────────────────────────────────── */
+.progress-bar {
+  height: 8px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 1s ease-out;
+}
+
+/* ─── KPI card ────────────────────────────────────────────────────────────── */
+.kpi-card {
+  background: rgba(30,30,46,0.9);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 20px 24px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent, linear-gradient(90deg, #6C63FF, #22D3EE));
+  border-radius: 16px 16px 0 0;
+}
+
+.kpi-card:hover {
+  border-color: rgba(255,255,255,0.14);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+/* ─── Buttons ─────────────────────────────────────────────────────────────── */
+.btn-primary {
+  background: linear-gradient(135deg, #6C63FF, #7C73FF);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.btn-primary:hover {
+  box-shadow: 0 4px 20px rgba(108,99,255,0.4);
+  transform: translateY(-1px);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-secondary {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.8);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.btn-secondary:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.2);
+}
+
+/* ─── FAB ─────────────────────────────────────────────────────────────────── */
+.fab {
+  position: fixed;
+  bottom: 80px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6C63FF, #22D3EE);
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 50;
+  box-shadow: 0 4px 24px rgba(108,99,255,0.5);
+  transition: all 0.2s ease;
+}
+
+.fab:hover {
+  transform: scale(1.1) rotate(45deg);
+  box-shadow: 0 6px 30px rgba(108,99,255,0.6);
+}
+
+@media (min-width: 1024px) {
+  .fab { bottom: 32px; right: 32px; }
+}
+
+/* ─── Input — en @layer components para que pl-* / pr-* puedan sobreescribir ── */
+@layer components {
+  .input-field {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-size: 14px;
+    width: 100%;
+    transition: all 0.2s ease;
+    outline: none;
+  }
+
+  .input-field:focus {
+    border-color: rgba(108,99,255,0.5);
+    background: rgba(108,99,255,0.05);
+    box-shadow: 0 0 0 3px rgba(108,99,255,0.1);
+  }
+
+  .input-field::placeholder {
+    color: var(--text-muted);
+  }
+}
+
+/* ─── Badge ───────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badge-success  { background: rgba(16,185,129,0.15);  color: #10B981; }
+.badge-warning  { background: rgba(245,158,11,0.15);  color: #F59E0B; }
+.badge-danger   { background: rgba(239,68,68,0.15);   color: #EF4444; }
+.badge-primary  { background: rgba(108,99,255,0.15);  color: #6C63FF; }
+.badge-secondary{ background: rgba(34,211,238,0.12);  color: #22D3EE; }
+.badge-muted    { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); }
+
+/* ─── Sidebar ─────────────────────────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-width);
+  height: 100vh;
+  background: rgba(20,20,38,0.97);
+  backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  flex-shrink: 0;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: rgba(255,255,255,0.50);
+  font-size: 14px;
+  font-weight: 500;
+  margin: 1px 8px;
+  text-decoration: none;
+}
+
+.sidebar-item:hover {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.9);
+}
+
+.sidebar-item.active {
+  background: rgba(108,99,255,0.15);
+  color: #a5a0ff;
+  border: 1px solid rgba(108,99,255,0.25);
+}
+
+/* ─── Bottom nav ──────────────────────────────────────────────────────────── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 64px;
+  background: rgba(20,20,38,0.98);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 8px;
+  z-index: 40;
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: all 0.15s ease;
+  color: rgba(255,255,255,0.4);
+  font-size: 10px;
+  font-weight: 500;
+  text-decoration: none;
+  flex: 1;
+  max-width: 80px;
+}
+
+.bottom-nav-item.active { color: #a5a0ff; }
+.bottom-nav-item:hover  { color: rgba(255,255,255,0.75); }
+
+/* ─── Skeleton shimmer ────────────────────────────────────────────────────── */
+.skeleton {
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+/* ─── Animations ──────────────────────────────────────────────────────────── */
+@keyframes shimmer    { to { left: 100%; } }
+@keyframes fadeIn     { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp    { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slideInRight { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+.animate-fade-in      { animation: fadeIn 0.3s ease; }
+.animate-slide-up     { animation: slideUp 0.4s ease; }
+.animate-slide-in-right { animation: slideInRight 0.35s ease; }
+
+/* ─── Table ───────────────────────────────────────────────────────────────── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 10px 16px;
+  color: rgba(255,255,255,0.40);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.85);
+}
+
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: rgba(255,255,255,0.025); }
+
+/* ─── Dropdown ────────────────────────────────────────────────────────────── */
+select.input-field {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+select.input-field option {
+  background-color: #1E1E2E;
+  color: rgba(255,255,255,0.85);
+}
+
+/* ─── Alert card ──────────────────────────────────────────────────────────── */
+.alert-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border-left: 3px solid;
+}
+
+.alert-card.warning  { background: rgba(245,158,11,0.08);  border-left-color: #F59E0B; }
+.alert-card.danger   { background: rgba(239,68,68,0.08);   border-left-color: #EF4444; }
+.alert-card.success  { background: rgba(16,185,129,0.08);  border-left-color: #10B981; }
+.alert-card.info     { background: rgba(108,99,255,0.08);  border-left-color: #6C63FF; }
+
+/* ─── CSS custom properties ──────────────────────────────────────────────────
+   All inline-style color values map to these variables so light/dark is one
+   change at the :root level, not hundreds of attribute selectors.
+   ──────────────────────────────────────────────────────────────────────────── */
+:root {
+  --fg-hi:  rgba(255,255,255,0.95);
+  --fg-1:   rgba(255,255,255,0.90);
+  --fg-2:   rgba(255,255,255,0.85);
+  --fg-3:   rgba(255,255,255,0.70);
+  --fg-4:   rgba(255,255,255,0.55);
+  --fg-5:   rgba(255,255,255,0.40);
+  --fg-6:   rgba(255,255,255,0.30);
+  --fg-7:   rgba(255,255,255,0.22);
+
+  --bg-card:   rgba(30,30,46,0.85);
+  --bg-panel:  rgba(20,20,38,0.97);
+  --bg-faint:  rgba(255,255,255,0.04);
+  --bg-hover:  rgba(255,255,255,0.06);
+  --bg-input:  rgba(255,255,255,0.05);
+
+  --bd:        rgba(255,255,255,0.08);
+  --bd-faint:  rgba(255,255,255,0.04);
+  --bd-hover:  rgba(255,255,255,0.15);
+}
+
+/* ─── Light mode ──────────────────────────────────────────────────────────── */
+.light {
+  --bg: #F0F2F8;
+  --bg-secondary: #E5E8F2;
+  --bg-card: #FFFFFF;
+  --border: rgba(0,0,0,0.08);
+  --text-primary: rgba(0,0,0,0.88);
+  --text-secondary: rgba(0,0,0,0.55);
+  --text-muted: rgba(0,0,0,0.35);
+
+  /* Override the new CSS vars for light mode */
+  --fg-hi:  rgba(0,0,0,0.88);
+  --fg-1:   rgba(0,0,0,0.82);
+  --fg-2:   rgba(0,0,0,0.75);
+  --fg-3:   rgba(0,0,0,0.60);
+  --fg-4:   rgba(0,0,0,0.45);
+  --fg-5:   rgba(0,0,0,0.35);
+  --fg-6:   rgba(0,0,0,0.25);
+  --fg-7:   rgba(0,0,0,0.18);
+
+  --bg-card:   rgba(255,255,255,0.95);
+  --bg-panel:  rgba(255,255,255,0.98);
+  --bg-faint:  rgba(0,0,0,0.03);
+  --bg-hover:  rgba(0,0,0,0.05);
+  --bg-input:  rgba(0,0,0,0.04);
+
+  --bd:        rgba(0,0,0,0.09);
+  --bd-faint:  rgba(0,0,0,0.05);
+  --bd-hover:  rgba(0,0,0,0.15);
+}
+
+.light body,
+.light html { background: #F0F2F8; color: rgba(0,0,0,0.88); }
+
+.light .glass-card,
+.light .glass-card-hover {
+  background: #fff;
+  border-color: rgba(0,0,0,0.08);
+}
+.light .glass-card-hover:hover {
+  background: #fff;
+  border-color: rgba(108,99,255,0.30);
+}
+
+.light .kpi-card {
+  background: #fff;
+  border-color: rgba(0,0,0,0.07);
+}
+.light .kpi-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.10); }
+
+.light .sidebar {
+  background: #fff;
+  border-right-color: rgba(0,0,0,0.07);
+}
+.light .sidebar-item { color: rgba(0,0,0,0.45); }
+.light .sidebar-item:hover { background: rgba(0,0,0,0.04); color: rgba(0,0,0,0.80); }
+.light .sidebar-item.active { background: rgba(108,99,255,0.10); color: #5B52E8; border-color: rgba(108,99,255,0.20); }
+
+.light .bottom-nav { background: rgba(255,255,255,0.98); border-top-color: rgba(0,0,0,0.08); }
+.light .bottom-nav-item { color: rgba(0,0,0,0.40); }
+.light .bottom-nav-item.active { color: #5B52E8; }
+
+.light .input-field {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.10);
+  color: rgba(0,0,0,0.88);
+}
+.light .input-field:focus {
+  background: rgba(108,99,255,0.05);
+  border-color: rgba(108,99,255,0.45);
+}
+.light .input-field::placeholder { color: rgba(0,0,0,0.30); }
+
+/* Select arrow — replace white SVG arrow with dark one */
+.light select.input-field {
+  background-color: rgba(0,0,0,0.04);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,0.45)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
+.light select.input-field option { background-color: #fff; color: rgba(0,0,0,0.88); }
+
+.light .data-table th { color: rgba(0,0,0,0.40); border-bottom-color: rgba(0,0,0,0.07); }
+.light .data-table td { color: rgba(0,0,0,0.82); border-bottom-color: rgba(0,0,0,0.04); }
+.light .data-table tr:hover td { background: rgba(0,0,0,0.02); }
+
+.light .btn-secondary {
+  background: rgba(0,0,0,0.05);
+  color: rgba(0,0,0,0.75);
+  border-color: rgba(0,0,0,0.10);
+}
+.light .btn-secondary:hover { background: rgba(0,0,0,0.09); }
+
+.light .progress-bar { background: rgba(0,0,0,0.08); }
+.light .skeleton { background: rgba(0,0,0,0.06); }
+
+.light ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); }
+.light ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.20); }
+
+/* ── Recharts / SVG overrides ─────────────────────────────────────────────── */
+/* Axis tick labels */
+.light .recharts-cartesian-axis-tick-value,
+.light .recharts-text { fill: rgba(0,0,0,0.50) !important; }
+/* Grid lines */
+.light .recharts-cartesian-grid-horizontal line,
+.light .recharts-cartesian-grid-vertical line,
+.light .recharts-cartesian-grid line { stroke: rgba(0,0,0,0.07) !important; }
+/* Tooltip cursor hover band */
+.light .recharts-rectangle.recharts-tooltip-cursor,
+.light .recharts-sector.recharts-tooltip-cursor { fill: rgba(0,0,0,0.04) !important; }
+/* Tooltip popup */
+.light .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: #fff !important;
+  border-color: rgba(0,0,0,0.10) !important;
+  color: rgba(0,0,0,0.82) !important;
+}
+.light .recharts-legend-item-text { color: rgba(0,0,0,0.65) !important; }
+
+/* ── Inline-style color overrides ────────────────────────────────────────────
+   These cover components that still use hardcoded rgba() inline styles.
+   Two selectors per alpha level: with and without trailing zero.
+   ──────────────────────────────────────────────────────────────────────────── */
+/* Text colors: white-on-dark → dark-on-light */
+.light [style*="color: rgba(255,255,255"] { color: var(--fg-1) !important; }
+/* More specific overrides win (listed after the catch-all) */
+.light [style*="color: rgba(255,255,255,0.9"]  { color: var(--fg-1) !important; }
+.light [style*="color: rgba(255,255,255,0.7"]  { color: var(--fg-3) !important; }
+.light [style*="color: rgba(255,255,255,0.5"]  { color: var(--fg-4) !important; }
+.light [style*="color: rgba(255,255,255,0.4"]  { color: var(--fg-5) !important; }
+.light [style*="color: rgba(255,255,255,0.3"]  { color: var(--fg-6) !important; }
+.light [style*="color: rgba(255,255,255,0.2"]  { color: var(--fg-7) !important; }
+
+/* Dark card/panel backgrounds → white */
+.light [style*="background: rgba(30,30,46"],
+.light [style*="background: rgba(30, 30, 46"],
+.light [style*="background: rgba(20,20,38"],
+.light [style*="background: rgba(20, 20, 38"],
+.light [style*="background: rgba(37,37,62"],
+.light [style*="background: rgba(37, 37, 62"],
+.light [style*="background: #1E1E2E"],
+.light [style*="background: #1e1e2e"],
+.light [style*="background: #0F0F1A"] {
+  background: var(--bg-card) !important;
+  border-color: var(--bd) !important;
+}
+
+/* Faint white overlays (hover/tab strip) → faint dark */
+.light [style*="background: rgba(255,255,255,0.04)"],
+.light [style*="background: rgba(255,255,255,0.05)"],
+.light [style*="background: rgba(255,255,255,0.06)"] { background: var(--bg-faint) !important; }
+
+/* White-alpha borders → dark borders */
+.light [style*="border: 1px solid rgba(255,255,255"],
+.light [style*="border-top: 1px solid rgba(255,255,255"],
+.light [style*="border-bottom: 1px solid rgba(255,255,255"],
+.light [style*="borderTop: "], .light [style*="borderBottom: "] { border-color: var(--bd) !important; }
+
