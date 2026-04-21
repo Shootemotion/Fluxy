@@ -3,7 +3,7 @@ import BottomNav from "@/components/layout/BottomNav";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-[#0F0F1A] overflow-x-hidden">
+    <div className="flex min-h-screen overflow-x-hidden" style={{ background: "var(--bg)" }}>
       {/* Sidebar (Occupies 240px) */}
       <Sidebar />
 
