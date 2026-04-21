@@ -314,6 +314,9 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
             dia_del_mes: diaDelMes,
             fecha_inicio: pFechaI || new Date().toISOString().split("T")[0],
             fecha_fin: payload.fecha_vencimiento || null,
+            categoria_id: null,
+            cuenta_id: null,
+            tasa_interes: null,
             activo: true,
           }).catch(() => { /* non-blocking: recurrente creation is best-effort */ });
         }
