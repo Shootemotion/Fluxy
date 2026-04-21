@@ -10,6 +10,7 @@ import {
   createRecurrente,
   createPlazoFijo, updatePlazoFijo, deletePlazoFijo,
 } from "@/lib/actions";
+import AmortizacionModal from "./AmortizacionModal";
 
 interface CarteraClientProps {
   initialValuations: any[];
@@ -245,6 +246,12 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
   const [pasivoHistory, setPasivoHistory]           = useState<Record<string, any[]>>({});
   const [historyLoading, setHistoryLoading]         = useState(false);
   const [projPage, setProjPage]                     = useState<Record<string, number>>({});
+
+  /* ── Amortization schedule modal ── */
+  const [showAmortModal, setShowAmortModal]   = useState(false);
+  const [amortPasivo, setAmortPasivo]         = useState<any>(null);
+  const [amortPagos, setAmortPagos]           = useState<any[]>([]);
+  const [amortLoading, setAmortLoading]       = useState(false);
 
   /* ── Plazos Fijos state ── */
   const [plazos, setPlazos]                   = useState(initialPlazos);
@@ -486,6 +493,36 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
       const updatedPasivos = await import("@/lib/actions").then(m => m.getPasivos ? m.getPasivos() : null);
       if (updatedPasivos) setPasivos(updatedPasivos);
     } catch (err: any) { alert("Error: " + err.message); }
+  }
+
+  async function openAmortModal(p: any) {
+    setAmortPasivo(p);
+    setShowAmortModal(true);
+    setAmortLoading(true);
+    try {
+      const hist = await getPagosPasivo(p.id);
+      setAmortPagos(hist);
+      // Also keep pasivoHistory in sync for the inline view
+      setPasivoHistory(prev => ({ ...prev, [p.id]: hist }));
+    } finally {
+      setAmortLoading(false);
+    }
+    if (!uvaEfectivo) fetchUva();
+  }
+
+  async function handleAmortSaldoUpdated(pasivoId: string) {
+    // Reload the pasivo list to get the updated saldo_pendiente
+    try {
+      const { getPasivos } = await import("@/lib/actions");
+      if (getPasivos) {
+        const fresh = await getPasivos();
+        setPasivos(fresh);
+      }
+    } catch {}
+    // Also refresh payment history in-memory
+    const hist = await getPagosPasivo(pasivoId);
+    setAmortPagos(hist);
+    setPasivoHistory(prev => ({ ...prev, [pasivoId]: hist }));
   }
 
   // Fixed correct French amortization projection with capital/interest split
@@ -920,6 +957,16 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                         Pago
                       </button>
+                      {isUva && p.capital_uva && p.n_cuotas && (
+                        <button onClick={() => openAmortModal(p)}
+                          className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg"
+                          style={{ background: "rgba(108,99,255,0.12)", color: "#A5A0FF" }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+                          </svg>
+                          Cuotas
+                        </button>
+                      )}
                       <button onClick={() => openEditPasivo(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/5" style={{ color: "var(--fg-6)" }}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </button>
@@ -1607,6 +1654,32 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
             </div>
           </div>
         </div>
+      )}
+
+      {/* ══ MODAL: Amortización ══ */}
+      {showAmortModal && amortPasivo && (
+        amortLoading ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div className="glass-card p-8 text-center">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#A5A0FF" strokeWidth="2" className="animate-spin mx-auto mb-3">
+                <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/>
+              </svg>
+              <p className="text-sm" style={{ color: "var(--fg-5)" }}>Cargando cronograma…</p>
+            </div>
+          </div>
+        ) : (
+          <AmortizacionModal
+            pasivo={amortPasivo}
+            initialPagos={amortPagos}
+            uvaEfectivo={uvaEfectivo}
+            cerEfectivo={cerEfectivo}
+            uvaCerMensual={uvaCerMensual}
+            accounts={accounts}
+            categories={categories}
+            onClose={() => { setShowAmortModal(false); setAmortPasivo(null); setAmortPagos([]); }}
+            onSaldoUpdated={handleAmortSaldoUpdated}
+          />
+        )
       )}
     </div>
   );
