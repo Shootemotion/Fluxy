@@ -24,53 +24,40 @@ export async function GET() {
     return NextResponse.json(uvaCache);
   }
 
-  const today     = new Date().toISOString().split("T")[0];
-  const tenAgo    = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-
   try {
-    // Step 1: discover UVA variable ID dynamically
-    let uvaVarId: number | null = null;
-    try {
-      const varRes = await bcraFetch("https://api.bcra.gob.ar/estadisticas/v2.0/principalesvariables");
-      if (varRes.ok) {
-        const varData = await varRes.json();
-        const results: any[] = varData?.results ?? [];
-        const entry = results.find((v: any) => /\buva\b/i.test(v.descripcion) && !/uvt/i.test(v.descripcion));
-        if (entry) uvaVarId = entry.idVariable;
-      }
-    } catch { /* variable discovery is optional */ }
+    const res = await fetch("https://api.argentinadatos.com/v1/finanzas/indices/uva", {
+      cache: "no-store"
+    });
 
-    // Step 2: try known IDs (UVA is typically 4 or 31 in BCRA series)
-    const ids = uvaVarId ? [uvaVarId, 4, 31, 27, 19] : [4, 31, 27, 19];
-
-    for (const id of ids) {
-      try {
-        const res = await bcraFetch(
-          `https://api.bcra.gob.ar/estadisticas/v2.0/datosVariable/${id}/${tenAgo}/${today}`
-        );
-        if (!res.ok) continue;
-        const data = await res.json();
-        const rows: any[] = data?.results ?? [];
-        if (!rows.length) continue;
-
-        const last  = rows[rows.length - 1];
-        const valor = Number(last.valor ?? last.v ?? last.value);
-        if (!valor || valor < 100) continue; // UVA > 100 ARS since 2024
-
-        uvaCache = {
-          valor,
-          fecha: last.fecha ?? last.d ?? today,
-          expiresAt: Date.now() + 6 * 60 * 60 * 1000,
-        };
-        return NextResponse.json(uvaCache);
-      } catch { continue; }
+    if (!res.ok) {
+      throw new Error("Error en la respuesta de la API");
     }
 
+    const data = await res.json();
+    
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new Error("Formato de datos incorrecto");
+    }
+
+    // API returns array of { fecha: "YYYY-MM-DD", valor: 123.45 }
+    // Get the last item which is the most recent
+    const last = data[data.length - 1];
+    
+    if (!last || !last.valor) {
+      throw new Error("No se encontró el valor UVA");
+    }
+
+    uvaCache = {
+      valor: last.valor,
+      fecha: last.fecha,
+      expiresAt: Date.now() + 6 * 60 * 60 * 1000, // 6 hours
+    };
+
+    return NextResponse.json(uvaCache);
+  } catch (err: any) {
     return NextResponse.json(
-      { error: "No se pudo obtener el valor del UVA desde el BCRA. Podés ingresarlo manualmente." },
+      { error: "No se pudo obtener el valor del UVA. Podés ingresarlo manualmente." },
       { status: 502 }
     );
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 502 });
   }
 }
