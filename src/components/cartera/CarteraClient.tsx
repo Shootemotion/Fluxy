@@ -8,6 +8,7 @@ import {
   createPasivo, updatePasivo, deletePasivo, registrarPagoPasivo,
   getPagosPasivo, deletePagoPasivo,
   createRecurrente,
+  createPlazoFijo, updatePlazoFijo, deletePlazoFijo,
 } from "@/lib/actions";
 
 interface CarteraClientProps {
@@ -16,6 +17,7 @@ interface CarteraClientProps {
   initialPasivos: any[];
   accounts: any[];
   categories: any[];
+  initialPlazos: any[];
 }
 
 const COLORES = ["#6C63FF","#22D3EE","#10B981","#F59E0B","#EF4444","#7C3AED","#EC4899","#14B8A6","#F97316","#84CC16","#6B7280"];
@@ -92,9 +94,9 @@ function TickerSearchInput({ value, onChange, onSelect }: {
 }
 
 /* ── Main component ─────────────────────────────────────────────────────────── */
-type Tab = "resumen" | "inversiones" | "activos" | "pasivos";
+type Tab = "resumen" | "inversiones" | "activos" | "pasivos" | "plazos";
 
-export default function CarteraClient({ initialValuations, initialPosiciones, initialPasivos, accounts, categories }: CarteraClientProps) {
+export default function CarteraClient({ initialValuations, initialPosiciones, initialPasivos, accounts, categories, initialPlazos }: CarteraClientProps) {
   const [tab, setTab] = useState<Tab>("resumen");
 
   /* ── Valuaciones ── */
@@ -187,9 +189,11 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
   const [uvaLoading, setUvaLoading] = useState(false);
   const [uvaError, setUvaError]     = useState("");
   const [uvaManual, setUvaManual]   = useState("");
+  const [uvaCerMensual, setUvaCerMensual] = useState<number | null>(null); // auto from API
 
-  // Effective UVA value: fetched or manual entry
   const uvaEfectivo = uvaValor ?? (uvaManual ? parseFloat(uvaManual) : null);
+  // CER fallback: 3% monthly if API didn't return one
+  const cerEfectivo = uvaCerMensual ?? 0.03;
 
   async function fetchUva() {
     setUvaLoading(true); setUvaError("");
@@ -198,6 +202,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
       const data = await res.json();
       if (data.valor && data.valor > 100) {
         setUvaValor(data.valor); setUvaFecha(data.fecha); setUvaManual("");
+        if (data.cerMensual) setUvaCerMensual(data.cerMensual);
       } else {
         setUvaError(data.error || "No se pudo obtener el valor del UVA.");
       }
@@ -240,7 +245,79 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
   const [pasivoHistory, setPasivoHistory]           = useState<Record<string, any[]>>({});
   const [historyLoading, setHistoryLoading]         = useState(false);
   const [projPage, setProjPage]                     = useState<Record<string, number>>({});
-  const CER_MENSUAL_DEFAULT = 0.03; // 3% monthly inflation assumption
+
+  /* ── Plazos Fijos state ── */
+  const [plazos, setPlazos]                   = useState(initialPlazos);
+  const [showPlazoModal, setShowPlazoModal]   = useState(false);
+  const [editingPlazo, setEditingPlazo]       = useState<any>(null);
+  const [plazoLoading, setPlazoLoading]       = useState(false);
+  const [plazoError, setPlazoError]           = useState("");
+  const [plEntidad, setPlEntidad]             = useState("");
+  const [plMonto, setPlMonto]                 = useState("");
+  const [plTna, setPlTna]                     = useState("");
+  const [plPlazo, setPlPlazo]                 = useState("30");
+  const [plFechaI, setPlFechaI]               = useState(new Date().toISOString().split("T")[0]);
+  const [plMoneda, setPlMoneda]               = useState("ARS");
+  const [plRenovacion, setPlRenovacion]       = useState(false);
+  const [plNotas, setPlNotas]                 = useState("");
+
+  function calcFechaVencPlazo(fechaI: string, dias: number): string {
+    const d = new Date(fechaI + "T12:00:00");
+    d.setDate(d.getDate() + dias);
+    return d.toISOString().split("T")[0];
+  }
+
+  function calcGananciaPlazo(monto: number, tnaPct: number, dias: number): number {
+    return monto * (tnaPct / 100) * (dias / 365);
+  }
+
+  function getDiasRestantes(fechaVenc: string): number {
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const venc = new Date(fechaVenc + "T00:00:00");
+    return Math.ceil((venc.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  function resetPlazoForm() {
+    setPlEntidad(""); setPlMonto(""); setPlTna(""); setPlPlazo("30"); setPlFechaI(new Date().toISOString().split("T")[0]);
+    setPlMoneda("ARS"); setPlRenovacion(false); setPlNotas(""); setPlazoError(""); setEditingPlazo(null);
+  }
+
+  function openEditPlazo(p: any) {
+    setEditingPlazo(p); setPlEntidad(p.entidad); setPlMonto(String(p.monto_inicial));
+    setPlTna(String(p.tasa_tna)); setPlPlazo(String(p.plazo_dias)); setPlFechaI(p.fecha_inicio);
+    setPlMoneda(p.moneda); setPlRenovacion(p.renovacion_automatica); setPlNotas(p.notas || "");
+    setShowPlazoModal(true);
+  }
+
+  async function handleSavePlazo(e: React.FormEvent) {
+    e.preventDefault();
+    if (!plEntidad.trim() || !plMonto || !plTna) return;
+    setPlazoLoading(true); setPlazoError("");
+    try {
+      const dias = parseInt(plPlazo);
+      const payload = {
+        entidad: plEntidad.trim(), monto_inicial: parseFloat(plMonto), tasa_tna: parseFloat(plTna),
+        plazo_dias: dias, fecha_inicio: plFechaI,
+        fecha_vencimiento: calcFechaVencPlazo(plFechaI, dias),
+        moneda: plMoneda, renovacion_automatica: plRenovacion, notas: plNotas || undefined,
+      };
+      if (editingPlazo) {
+        const upd = await updatePlazoFijo(editingPlazo.id, payload);
+        setPlazos(prev => prev.map(p => p.id === editingPlazo.id ? upd : p));
+      } else {
+        const crd = await createPlazoFijo(payload);
+        setPlazos(prev => [...prev, crd]);
+      }
+      setShowPlazoModal(false); resetPlazoForm();
+    } catch (err: any) { setPlazoError(err.message); }
+    finally { setPlazoLoading(false); }
+  }
+
+  async function handleDeletePlazo(id: string) {
+    if (!confirm("\u00BFEliminar este plazo fijo?")) return;
+    await deletePlazoFijo(id);
+    setPlazos(prev => prev.filter(p => p.id !== id));
+  }
 
   function resetPasivoForm() {
     setPNombre(""); setPTipo("prestamo"); setPSistema("frances"); setPMontoOrig(""); setPSaldo("");
@@ -411,30 +488,49 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
     } catch (err: any) { alert("Error: " + err.message); }
   }
 
-  // Generate installment projection for a UVA loan
+  // Fixed correct French amortization projection with capital/interest split
+  // Uses CER from API (cerEfectivo) instead of hardcoded 3%
   function calcProyeccion(p: any, uvaActual: number, cerMensual: number, page: number) {
-    if (!p.capital_uva || !p.cuota_uva || !p.fecha_inicio) return [];
+    if (!p.capital_uva || !p.cuota_uva || !p.n_cuotas) return [];
     const cuotaUva = Number(p.cuota_uva);
-    const totalUvasPagadas = (pasivoHistory[p.id] || [])
-      .reduce((s: number, pg: any) => s + (Number(pg.uva_equivalente) || 0), 0);
-    const cuotasPagadas = Math.round(totalUvasPagadas / cuotaUva);
+    const tasaMensual = Number(p.tasa_interes || 0) / 12 / 100;
+    const hist = pasivoHistory[p.id] || [];
+    // Count cuotas actually paid (from history, ordered by cuota_numero)
+    const cuotasPagadas = hist.length;
+    // Start page offset
     const start = cuotasPagadas + page * 10;
-    const result = [];
+
+    // Run amortization to find balance at cuota `start`
+    let balance = Number(p.capital_uva);
+    for (let i = 0; i < start; i++) {
+      const interes = balance * tasaMensual;
+      balance = Math.max(0, balance - (cuotaUva - interes));
+    }
+    // Project UVA forward from current to cuota at `start`
     let uvaProyectado = uvaActual;
-    for (let i = 0; i < start; i++) uvaProyectado *= (1 + cerMensual);
-    const fechaBase = new Date(p.fecha_inicio + "T12:00:00");
-    fechaBase.setMonth(fechaBase.getMonth() + start);
+    for (let i = cuotasPagadas; i < start; i++) uvaProyectado *= (1 + cerMensual);
+
+    const startDate = new Date((p.fecha_inicio || new Date().toISOString().split("T")[0]) + "T12:00:00");
+    startDate.setMonth(startDate.getMonth() + start);
+
+    const result = [];
     for (let i = 0; i < 10; i++) {
       const nCuota = start + i + 1;
       if (nCuota > Number(p.n_cuotas)) break;
-      const fecha = new Date(fechaBase);
+      const interesUva = tasaMensual > 0 ? balance * tasaMensual : 0;
+      const capitalUva = Math.max(0, cuotaUva - interesUva);
+      const fecha = new Date(startDate);
       fecha.setMonth(fecha.getMonth() + i);
-      const mesMostrar = fecha.toLocaleDateString("es-AR", { month: "short", year: "numeric" });
       result.push({
-        nCuota, mesMostrar,
+        nCuota,
+        mes: fecha.toLocaleDateString("es-AR", { month: "short", year: "numeric" }),
+        capitalUva, interesUva, cuotaUva,
         uvaVal: uvaProyectado,
         cuotaArs: Math.round(cuotaUva * uvaProyectado),
+        capitalArs: Math.round(capitalUva * uvaProyectado),
+        interesArs: Math.round(interesUva * uvaProyectado),
       });
+      balance = Math.max(0, balance - capitalUva);
       uvaProyectado *= (1 + cerMensual);
     }
     return result;
@@ -455,9 +551,17 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
 
   const totalPasivosARS = pasivos.reduce((s: number, p: any) => p.moneda === "USD" ? s + Number(p.saldo_pendiente) * TC_REF : s + Number(p.saldo_pendiente), 0);
   const totalActivosARS = totalActivosFisicos + totalInversionesARS;
-  const patrimonioNeto  = totalActivosARS - totalPasivosARS;
+  const totalPlazosARS = plazos
+    .filter((pf: any) => pf.estado === "activo")
+    .reduce((s: number, pf: any) => {
+      const ganancia = calcGananciaPlazo(Number(pf.monto_inicial), Number(pf.tasa_tna), Number(pf.plazo_dias));
+      const total = Number(pf.monto_inicial) + ganancia;
+      return pf.moneda === "USD" ? s + total * TC_REF : s + total;
+    }, 0);
+  const patrimonioNeto  = totalActivosARS + totalPlazosARS - totalPasivosARS;
 
   const TIPO_PASIVO_LABELS: Record<string, string> = { prestamo: "Préstamo", hipoteca: "Hipoteca", tarjeta: "Tarjeta", leasing: "Leasing", otro: "Otro" };
+  const CER_MENSUAL_DEFAULT = 0.03; // fallback if no API CER
 
   /* ── Render ── */
   return (
@@ -471,12 +575,13 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
         {tab === "activos"    && <button onClick={() => setShowValModal(true)}                            className="btn-primary text-sm">+ Activo físico</button>}
         {tab === "inversiones"&& <button onClick={() => { resetPosForm(); setShowPosModal(true); }}       className="btn-primary text-sm">+ Posición</button>}
         {tab === "pasivos"    && <button onClick={() => { resetPasivoForm(); setShowPasivoModal(true); }} className="btn-primary text-sm">+ Pasivo</button>}
+        {tab === "plazos"     && <button onClick={() => { resetPlazoForm(); setShowPlazoModal(true); }}   className="btn-primary text-sm">+ Plazo Fijo</button>}
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl overflow-x-auto" style={{ background: "rgba(255,255,255,0.04)" }}>
-        {(["resumen","inversiones","activos","pasivos"] as Tab[]).map(t => {
-          const labels: Record<Tab, string> = { resumen: "📊 Resumen", inversiones: "📈 Inversiones", activos: "🏠 Activos", pasivos: "📉 Pasivos" };
+        {(["resumen","inversiones","activos","pasivos","plazos"] as Tab[]).map(t => {
+          const labels: Record<Tab, string> = { resumen: "📊 Resumen", inversiones: "📈 Inversiones", activos: "🏠 Activos", pasivos: "📉 Pasivos", plazos: "🏦 Plazos Fijos" };
           return (
             <button key={t} onClick={() => setTab(t)}
               className="flex-1 py-2 text-sm font-semibold rounded-lg transition-all whitespace-nowrap"
@@ -496,6 +601,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
               { label: "Patrimonio neto", val: patrimonioNeto, color: patrimonioNeto >= 0 ? "#10B981" : "#EF4444", accent: "#10B981" },
               { label: "Total activos",   val: totalActivosARS, color: "rgba(255,255,255,0.90)", accent: "#6C63FF" },
               { label: "Total pasivos",   val: totalPasivosARS, color: "#EF4444", accent: "#EF4444" },
+              { label: "Plazos fijos",   val: totalPlazosARS, color: "rgba(255,255,255,0.90)", accent: "#F59E0B" },
               { label: "TC referencia",   val: TC_REF, color: "rgba(255,255,255,0.90)", accent: "#F59E0B", isTc: true },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ "--accent": k.accent } as React.CSSProperties}>
@@ -749,7 +855,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
               const history = pasivoHistory[p.id] || [];
               const pageNum = projPage[p.id] || 0;
               const proyeccion = isUva && uvaEfectivo
-                ? calcProyeccion(p, uvaEfectivo, CER_MENSUAL_DEFAULT, pageNum)
+                ? calcProyeccion(p, uvaEfectivo, cerEfectivo, pageNum)
                 : [];
               const totalUdas = p.capital_uva || 0;
               const udasPagadas = history.reduce((s: number, pg: any) => s + (Number(pg.uva_equivalente) || 0), 0);
@@ -869,7 +975,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                             <p className="text-xs font-semibold uppercase" style={{ color: "rgba(255,255,255,0.40)" }}>
                               Proyección de cuotas
                               <span className="ml-1 font-normal normal-case" style={{ color: "rgba(255,255,255,0.25)" }}>
-                                (CER {(CER_MENSUAL_DEFAULT * 100).toFixed(0)}%/mes estimado)
+                                (CER {(cerEfectivo * 100).toFixed(1)}%/mes{uvaCerMensual ? " · dato real BCRA" : " · estimado"})
                               </span>
                             </p>
                             {!uvaEfectivo && (
@@ -884,19 +990,23 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                                 <table className="w-full text-xs">
                                   <thead>
                                     <tr style={{ background: "rgba(255,255,255,0.04)" }}>
-                                      <th className="px-3 py-1.5 text-left" style={{ color: "rgba(255,255,255,0.35)" }}>N°</th>
-                                      <th className="px-3 py-1.5 text-left" style={{ color: "rgba(255,255,255,0.35)" }}>Mes</th>
-                                      <th className="px-3 py-1.5 text-right" style={{ color: "rgba(255,255,255,0.35)" }}>UVA est.</th>
-                                      <th className="px-3 py-1.5 text-right" style={{ color: "rgba(255,255,255,0.35)" }}>Cuota ARS</th>
+                                      <th className="px-2 py-1.5 text-left" style={{ color: "rgba(255,255,255,0.35)" }}>N°</th>
+                                      <th className="px-2 py-1.5 text-left" style={{ color: "rgba(255,255,255,0.35)" }}>Mes</th>
+                                      <th className="px-2 py-1.5 text-right" style={{ color: "#10B981" }}>Cap.UVA</th>
+                                      <th className="px-2 py-1.5 text-right" style={{ color: "rgba(255,255,255,0.35)" }}>Int.UVA</th>
+                                      <th className="px-2 py-1.5 text-right" style={{ color: "#A5A0FF" }}>Cuota ARS</th>
+                                      <th className="px-2 py-1.5 text-right" style={{ color: "rgba(255,255,255,0.35)" }}>UVA est.</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {proyeccion.map((c) => (
                                       <tr key={c.nCuota} style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-                                        <td className="px-3 py-1.5 font-mono" style={{ color: "rgba(255,255,255,0.40)" }}>{c.nCuota}</td>
-                                        <td className="px-3 py-1.5" style={{ color: "rgba(255,255,255,0.60)" }}>{c.mesMostrar}</td>
-                                        <td className="px-3 py-1.5 text-right font-mono" style={{ color: "rgba(255,255,255,0.45)" }}>${c.uvaVal.toLocaleString("es-AR", { maximumFractionDigits: 0 })}</td>
-                                        <td className="px-3 py-1.5 text-right font-mono font-semibold" style={{ color: "#A5A0FF" }}>${c.cuotaArs.toLocaleString("es-AR")}</td>
+                                        <td className="px-2 py-1.5 font-mono" style={{ color: "rgba(255,255,255,0.40)" }}>{c.nCuota}</td>
+                                        <td className="px-2 py-1.5" style={{ color: "rgba(255,255,255,0.60)" }}>{c.mes}</td>
+                                        <td className="px-2 py-1.5 text-right font-mono" style={{ color: "#10B981" }}>{c.capitalUva.toFixed(1)}</td>
+                                        <td className="px-2 py-1.5 text-right font-mono" style={{ color: "rgba(255,255,255,0.35)" }}>{c.interesUva.toFixed(1)}</td>
+                                        <td className="px-2 py-1.5 text-right font-mono font-bold" style={{ color: "#A5A0FF" }}>${c.cuotaArs.toLocaleString("es-AR")}</td>
+                                        <td className="px-2 py-1.5 text-right font-mono" style={{ color: "rgba(255,255,255,0.40)" }}>${c.uvaVal.toLocaleString("es-AR", { maximumFractionDigits: 0 })}</td>
                                       </tr>
                                     ))}
                                   </tbody>
@@ -938,6 +1048,180 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
             </div>
           </div>
         )
+      )}
+
+      {/* ══ TAB: Plazos Fijos ══ */}
+      {tab === "plazos" && (
+        plazos.length === 0 ? (
+          <div className="glass-card p-12 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center" style={{ background: "rgba(245,158,11,0.10)" }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            </div>
+            <p className="font-semibold mb-1" style={{ color: "rgba(255,255,255,0.75)" }}>Sin plazos fijos registrados</p>
+            <p className="text-sm mb-4" style={{ color: "rgba(255,255,255,0.35)" }}>Agregá tus plazos fijos para hacer un seguimiento</p>
+            <button onClick={() => { resetPlazoForm(); setShowPlazoModal(true); }} className="btn-primary">+ Agregar plazo fijo</button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {plazos.map((pf: any) => {
+              const diasRest = getDiasRestantes(pf.fecha_vencimiento);
+              const ganancia = calcGananciaPlazo(Number(pf.monto_inicial), Number(pf.tasa_tna), Number(pf.plazo_dias));
+              const valorFinal = Number(pf.monto_inicial) + ganancia;
+              const pct = Math.min(100, Math.max(0, ((Number(pf.plazo_dias) - diasRest) / Number(pf.plazo_dias)) * 100));
+              const vencido = diasRest <= 0;
+              const statusColor = vencido ? "#F59E0B" : diasRest <= 7 ? "#EF4444" : "#10B981";
+              return (
+                <div key={pf.id} className="glass-card p-4">
+                  <div className="flex items-start gap-4">
+                    {/* Bank icon */}
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(245,158,11,0.12)" }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                    </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <p className="font-semibold text-sm" style={{ color: "rgba(255,255,255,0.90)" }}>{pf.entidad}</p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: `${statusColor}18`, color: statusColor }}>
+                          {vencido ? "Vencido" : `${diasRest}d restantes`}
+                        </span>
+                        {pf.renovacion_automatica && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(108,99,255,0.15)", color: "#A5A0FF" }}>Auto-renueva</span>}
+                      </div>
+                      {/* Progress bar */}
+                      <div className="w-full h-1 rounded-full mb-2" style={{ background: "rgba(255,255,255,0.08)" }}>
+                        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: vencido ? "#F59E0B" : "#10B981" }} />
+                      </div>
+                      {/* Numbers grid */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <p className="text-[10px] uppercase mb-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>Capital</p>
+                          <p className="text-sm font-mono font-semibold" style={{ color: "rgba(255,255,255,0.80)" }}>
+                            {pf.moneda === "USD" ? "U$S" : "$"} {Number(pf.monto_inicial).toLocaleString("es-AR")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase mb-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>Ganancia est.</p>
+                          <p className="text-sm font-mono font-semibold" style={{ color: "#10B981" }}>
+                            + {pf.moneda === "USD" ? "U$S" : "$"} {ganancia.toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase mb-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>Total al vence</p>
+                          <p className="text-sm font-mono font-bold" style={{ color: "#F59E0B" }}>
+                            {pf.moneda === "USD" ? "U$S" : "$"} {valorFinal.toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] mt-1.5" style={{ color: "rgba(255,255,255,0.25)" }}>
+                        TNA {pf.tasa_tna}% · {pf.plazo_dias} días · {pf.fecha_inicio} → {pf.fecha_vencimiento}
+                      </p>
+                    </div>
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button onClick={() => openEditPlazo(pf)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/5" style={{ color: "rgba(255,255,255,0.30)" }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                      <button onClick={() => handleDeletePlazo(pf.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/5" style={{ color: "rgba(239,68,68,0.5)" }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {/* Summary bar */}
+            <div className="glass-card px-5 py-3 flex items-center justify-between">
+              <p className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.50)" }}>Total plazos activos</p>
+              <p className="font-mono font-bold" style={{ color: "#F59E0B" }}>$ {totalPlazosARS.toLocaleString("es-AR", { maximumFractionDigits: 0 })}</p>
+            </div>
+          </div>
+        )
+      )}
+
+      {/* ══ MODAL: Plazo Fijo ══ */}
+      {showPlazoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="glass-card w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <h2 className="text-xl font-bold" style={{ color: "rgba(255,255,255,0.9)" }}>{editingPlazo ? "Editar plazo fijo" : "Nuevo plazo fijo"}</h2>
+                <button onClick={() => { setShowPlazoModal(false); resetPlazoForm(); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+
+              {/* Live preview */}
+              {plMonto && plTna && plPlazo && (
+                <div className="rounded-xl p-3 mb-4 space-y-1" style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.20)" }}>
+                  <p className="text-[10px] font-semibold uppercase" style={{ color: "#F59E0B" }}>Vista previa</p>
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: "rgba(255,255,255,0.55)" }}>Ganancia estimada</span>
+                    <span className="font-mono font-bold" style={{ color: "#10B981" }}>
+                      + {plMoneda === "USD" ? "U$S" : "$"} {calcGananciaPlazo(parseFloat(plMonto)||0, parseFloat(plTna)||0, parseInt(plPlazo)||30).toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: "rgba(255,255,255,0.55)" }}>Total al vencimiento</span>
+                    <span className="font-mono font-bold" style={{ color: "#F59E0B" }}>
+                      {plMoneda === "USD" ? "U$S" : "$"} {((parseFloat(plMonto)||0) + calcGananciaPlazo(parseFloat(plMonto)||0, parseFloat(plTna)||0, parseInt(plPlazo)||30)).toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                  <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.30)" }}>
+                    Vence: {plFechaI && plPlazo ? calcFechaVencPlazo(plFechaI, parseInt(plPlazo)||30) : "—"}
+                  </p>
+                </div>
+              )}
+
+              <form onSubmit={handleSavePlazo} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Banco / Entidad *</label>
+                  <input type="text" className="input-field" placeholder="Ej: Banco Galicia, Mercado Pago…" value={plEntidad} onChange={e => setPlEntidad(e.target.value)} required autoFocus />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Capital invertido *</label>
+                    <input type="number" className="input-field font-mono" placeholder="0" min="0" step="any" value={plMonto} onChange={e => setPlMonto(e.target.value)} onFocus={e => e.target.select()} required />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>TNA (%) *</label>
+                    <input type="number" className="input-field font-mono" placeholder="Ej: 110.5" min="0" max="9999" step="0.01" value={plTna} onChange={e => setPlTna(e.target.value)} onFocus={e => e.target.select()} required />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Plazo (días) *</label>
+                    <select className="input-field" value={plPlazo} onChange={e => setPlPlazo(e.target.value)}>
+                      {[30,60,90,120,180,270,365].map(d => <option key={d} value={d}>{d} días</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Moneda</label>
+                    <select className="input-field" value={plMoneda} onChange={e => setPlMoneda(e.target.value)}>
+                      <option value="ARS">$ ARS</option>
+                      <option value="USD">U$S USD</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Fecha de inicio</label>
+                  <input type="date" className="input-field" value={plFechaI} onChange={e => setPlFechaI(e.target.value)} required />
+                </div>
+                <div className="flex items-center gap-3 py-2">
+                  <input type="checkbox" id="plazo-renovacion" checked={plRenovacion} onChange={e => setPlRenovacion(e.target.checked)} className="w-4 h-4 accent-purple-500 rounded" />
+                  <label htmlFor="plazo-renovacion" className="text-sm" style={{ color: "rgba(255,255,255,0.60)" }}>Renovación automática al vencimiento</label>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Notas (opcional)</label>
+                  <input type="text" className="input-field" placeholder="Número de constancia, observaciones…" value={plNotas} onChange={e => setPlNotas(e.target.value)} />
+                </div>
+                {plazoError && <p className="text-sm" style={{ color: "#EF4444" }}>{plazoError}</p>}
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => { setShowPlazoModal(false); resetPlazoForm(); }} className="btn-secondary flex-1">Cancelar</button>
+                  <button type="submit" disabled={plazoLoading} className="btn-primary flex-1">{plazoLoading ? "Guardando…" : editingPlazo ? "Actualizar" : "Crear plazo"}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ══ MODAL: Activo físico ══ */}

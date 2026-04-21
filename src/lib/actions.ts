@@ -955,6 +955,22 @@ export async function deletePasivo(id: string) {
   revalidatePath("/app/cartera");
 }
 
+// ─── UVA amortization helper ─────────────────────────────────────────────────
+// Standard French amortization: calculates capital + interest for cuota N
+function calcCuotaUVADesglose(
+  capitalUva: number, cuotaUvaFija: number, tnaPct: number, cuotaNum: number
+) {
+  const tasaMensual = tnaPct / 12 / 100;
+  let saldo = capitalUva;
+  for (let i = 1; i < cuotaNum; i++) {
+    const interes = saldo * tasaMensual;
+    saldo = Math.max(0, saldo - (cuotaUvaFija - interes));
+  }
+  const interesUva = tasaMensual > 0 ? saldo * tasaMensual : 0;
+  const capitalUvaCalc = Math.max(0, cuotaUvaFija - interesUva);
+  return { capitalUva: capitalUvaCalc, interesUva };
+}
+
 export async function registrarPagoPasivo(
   pasivoId: string,
   montoArs: number,
@@ -968,134 +984,152 @@ export async function registrarPagoPasivo(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  // Calculate UVA equivalent if UVA value provided
-  const uvaEquivalente = uvaValor && uvaValor > 0 ? montoArs / uvaValor : null;
-
-  // 1. Store the payment in pagos_pasivos
-  const { error: pagoError } = await supabase
-    .from("pagos_pasivos")
-    .insert({
-      pasivo_id: pasivoId,
-      usuario_id: user.id,
-      fecha,
-      monto_ars: montoArs,
-      uva_valor: uvaValor ?? null,
-      uva_equivalente: uvaEquivalente,
-      descripcion,
-      cuenta_id: cuentaId,
-      categoria_id: categoriaId,
-    });
-
-  if (pagoError) throw pagoError;
-
-  // 2. Create the movement (expense)
-  await supabase
-    .from("movimientos")
-    .insert({
-      usuario_id: user.id,
-      tipo: "gasto",
-      monto: montoArs,
-      moneda: "ARS",
-      fecha,
-      descripcion,
-      cuenta_origen_id: cuentaId,
-      categoria_id: categoriaId,
-    });
-
-  // 3. Recalculate saldo_pendiente from all payments
   const { data: pasivo } = await supabase
     .from("pasivos")
-    .select("monto_original, capital_uva, sistema_amortizacion")
-    .eq("id", pasivoId)
-    .eq("usuario_id", user.id)
-    .single();
+    .select("monto_original, capital_uva, sistema_amortizacion, cuota_uva, tasa_interes")
+    .eq("id", pasivoId).eq("usuario_id", user.id).single();
+  if (!pasivo) throw new Error("Pasivo no encontrado");
 
-  if (pasivo) {
-    const { data: pagos } = await supabase
-      .from("pagos_pasivos")
-      .select("monto_ars, uva_equivalente")
-      .eq("pasivo_id", pasivoId);
+  const isUva = pasivo.sistema_amortizacion === "uva"
+    && pasivo.capital_uva && pasivo.cuota_uva && uvaValor && uvaValor > 0;
 
-    let nuevoSaldo: number;
-    if (pasivo.sistema_amortizacion === "uva" && pasivo.capital_uva && uvaValor && uvaValor > 0) {
-      // For UVA loans: track in UVAs, convert back to ARS at current rate
-      const totalUvasPagadas = (pagos || []).reduce((sum: number, p: any) => sum + (Number(p.uva_equivalente) || 0), 0);
-      const saldoUdas = Math.max(0, Number(pasivo.capital_uva) - totalUvasPagadas);
-      nuevoSaldo = saldoUdas * uvaValor;
-    } else {
-      // For regular loans: simple ARS sum
-      const totalPagado = (pagos || []).reduce((sum: number, p: any) => sum + Number(p.monto_ars), 0);
-      nuevoSaldo = Math.max(0, Number(pasivo.monto_original) - totalPagado);
-    }
+  const { count: cuotasYaPagadas } = await supabase
+    .from("pagos_pasivos")
+    .select("id", { count: "exact", head: true })
+    .eq("pasivo_id", pasivoId);
 
-    await supabase.from("pasivos").update({ saldo_pendiente: nuevoSaldo }).eq("id", pasivoId);
+  const cuotaNum = (cuotasYaPagadas ?? 0) + 1;
+  let capitalUvaPagado: number | null = null;
+  let interesUvaPagado: number | null = null;
+  let uvaEquivalente: number | null = null;
+
+  if (isUva && pasivo.capital_uva && pasivo.cuota_uva && uvaValor) {
+    const desglose = calcCuotaUVADesglose(
+      Number(pasivo.capital_uva), Number(pasivo.cuota_uva),
+      Number(pasivo.tasa_interes || 0), cuotaNum
+    );
+    capitalUvaPagado = desglose.capitalUva;
+    interesUvaPagado = desglose.interesUva;
+    uvaEquivalente = Number(pasivo.cuota_uva);
   }
 
-  revalidatePath("/app/cartera");
-  revalidatePath("/app/movimientos");
-  revalidatePath("/app/dashboard");
+  const { error: pagoError } = await supabase.from("pagos_pasivos").insert({
+    pasivo_id: pasivoId, usuario_id: user.id, fecha,
+    monto_ars: montoArs, uva_valor: uvaValor ?? null,
+    uva_equivalente: uvaEquivalente,
+    capital_uva_pagado: capitalUvaPagado,
+    interes_uva_pagado: interesUvaPagado,
+    cuota_numero: cuotaNum,
+    descripcion, cuenta_id: cuentaId, categoria_id: categoriaId,
+  });
+  if (pagoError) throw pagoError;
+
+  await supabase.from("movimientos").insert({
+    usuario_id: user.id, tipo: "gasto", monto: montoArs, moneda: "ARS",
+    fecha, descripcion, cuenta_origen_id: cuentaId, categoria_id: categoriaId,
+  });
+
+  const { data: todosLosPagos } = await supabase
+    .from("pagos_pasivos").select("monto_ars, capital_uva_pagado").eq("pasivo_id", pasivoId);
+
+  let nuevoSaldo: number;
+  if (isUva && pasivo.capital_uva && uvaValor) {
+    const totalCapUvas = (todosLosPagos || []).reduce((s: number, p: any) => s + (Number(p.capital_uva_pagado) || 0), 0);
+    nuevoSaldo = Math.max(0, Number(pasivo.capital_uva) - totalCapUvas) * uvaValor;
+  } else {
+    const totalPagado = (todosLosPagos || []).reduce((s: number, p: any) => s + Number(p.monto_ars), 0);
+    nuevoSaldo = Math.max(0, Number(pasivo.monto_original) - totalPagado);
+  }
+
+  await supabase.from("pasivos").update({ saldo_pendiente: nuevoSaldo }).eq("id", pasivoId);
+  revalidatePath("/app/cartera"); revalidatePath("/app/movimientos"); revalidatePath("/app/dashboard");
 }
 
 export async function getPagosPasivo(pasivoId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
-
-  const { data } = await supabase
-    .from("pagos_pasivos")
+  const { data } = await supabase.from("pagos_pasivos")
     .select("*, cuentas(nombre), categorias(nombre)")
-    .eq("pasivo_id", pasivoId)
-    .eq("usuario_id", user.id)
-    .order("fecha", { ascending: false });
-
+    .eq("pasivo_id", pasivoId).eq("usuario_id", user.id)
+    .order("cuota_numero", { ascending: true });
   return data || [];
 }
 
-export async function deletePagoPasivo(
-  pagoId: string,
-  pasivoId: string,
-  uvaValorActual?: number | null,
-) {
+export async function deletePagoPasivo(pagoId: string, pasivoId: string, uvaValorActual?: number | null) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  // Delete the payment
-  const { error } = await supabase
-    .from("pagos_pasivos")
-    .delete()
-    .eq("id", pagoId)
-    .eq("usuario_id", user.id);
-
+  const { error } = await supabase.from("pagos_pasivos").delete()
+    .eq("id", pagoId).eq("usuario_id", user.id);
   if (error) throw error;
 
-  // Recalculate saldo_pendiente from remaining payments
-  const { data: pasivo } = await supabase
-    .from("pasivos")
+  const { data: pasivo } = await supabase.from("pasivos")
     .select("monto_original, capital_uva, sistema_amortizacion")
-    .eq("id", pasivoId)
-    .eq("usuario_id", user.id)
-    .single();
+    .eq("id", pasivoId).eq("usuario_id", user.id).single();
 
   if (pasivo) {
-    const { data: pagos } = await supabase
-      .from("pagos_pasivos")
-      .select("monto_ars, uva_equivalente")
-      .eq("pasivo_id", pasivoId);
-
+    const { data: pagos } = await supabase.from("pagos_pasivos")
+      .select("monto_ars, capital_uva_pagado").eq("pasivo_id", pasivoId);
     let nuevoSaldo: number;
     if (pasivo.sistema_amortizacion === "uva" && pasivo.capital_uva && uvaValorActual && uvaValorActual > 0) {
-      const totalUvasPagadas = (pagos || []).reduce((sum: number, p: any) => sum + (Number(p.uva_equivalente) || 0), 0);
-      const saldoUdas = Math.max(0, Number(pasivo.capital_uva) - totalUvasPagadas);
-      nuevoSaldo = saldoUdas * uvaValorActual;
+      const totalCap = (pagos || []).reduce((s: number, p: any) => s + (Number(p.capital_uva_pagado) || 0), 0);
+      nuevoSaldo = Math.max(0, Number(pasivo.capital_uva) - totalCap) * uvaValorActual;
     } else {
-      const totalPagado = (pagos || []).reduce((sum: number, p: any) => sum + Number(p.monto_ars), 0);
-      nuevoSaldo = Math.max(0, Number(pasivo.monto_original) - totalPagado);
+      const totalPag = (pagos || []).reduce((s: number, p: any) => s + Number(p.monto_ars), 0);
+      nuevoSaldo = Math.max(0, Number(pasivo.monto_original) - totalPag);
     }
-
     await supabase.from("pasivos").update({ saldo_pendiente: nuevoSaldo }).eq("id", pasivoId);
   }
+  revalidatePath("/app/cartera");
+}
 
+// ─── Plazos Fijos ─────────────────────────────────────────────────────────────
+
+export async function getPlazos() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data } = await supabase.from("plazos_fijos").select("*")
+    .eq("usuario_id", user.id).order("fecha_vencimiento", { ascending: true });
+  return data || [];
+}
+
+export async function createPlazoFijo(payload: {
+  entidad: string; monto_inicial: number; tasa_tna: number; plazo_dias: number;
+  fecha_inicio: string; fecha_vencimiento: string; moneda: string;
+  renovacion_automatica: boolean; notas?: string;
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  const { data, error } = await supabase.from("plazos_fijos")
+    .insert({ ...payload, usuario_id: user.id }).select().single();
+  if (error) throw error;
+  revalidatePath("/app/cartera");
+  return data;
+}
+
+export async function updatePlazoFijo(id: string, payload: Record<string, any>) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  const { data, error } = await supabase.from("plazos_fijos")
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq("id", id).eq("usuario_id", user.id).select().single();
+  if (error) throw error;
+  revalidatePath("/app/cartera");
+  return data;
+}
+
+export async function deletePlazoFijo(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  const { error } = await supabase.from("plazos_fijos").delete()
+    .eq("id", id).eq("usuario_id", user.id);
+  if (error) throw error;
   revalidatePath("/app/cartera");
 }
 
