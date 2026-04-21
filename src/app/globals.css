@@ -1,3 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #6C63FF;
+  --color-secondary: #22D3EE;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+}
+
 /* ─── CSS custom properties ──────────────────────────────────────────────────
    All components should use THESE variables instead of hardcoded rgba.
    ──────────────────────────────────────────────────────────────────────────── */
@@ -216,5 +226,191 @@
   color: inherit;
 }
 
-/* Hide some legacy attribute-based cleaners as we refactor components */
-#root, #__next { height: 100%; }
+/* ─── Sidebar Item ────────────────────────────────────────────────────────── */
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--fg-4);
+  font-size: 14px;
+  font-weight: 500;
+  margin: 1px 8px;
+  text-decoration: none;
+}
+
+.sidebar-item:hover {
+  background: var(--bg-hover);
+  color: var(--fg-1);
+}
+
+.sidebar-item.active {
+  background: rgba(108,99,255,0.15);
+  color: #a5a0ff;
+  border: 1px solid rgba(108,99,255,0.25);
+}
+
+/* ─── Bottom nav ──────────────────────────────────────────────────────────── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 64px;
+  background: var(--bg-panel);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--bd);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 8px;
+  z-index: 40;
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: all 0.15s ease;
+  color: var(--fg-5);
+  font-size: 10px;
+  font-weight: 500;
+  text-decoration: none;
+  flex: 1;
+  max-width: 80px;
+}
+
+.bottom-nav-item.active { color: #a5a0ff; }
+.bottom-nav-item:hover  { color: var(--fg-2); }
+
+/* ─── Badge ───────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badge-success  { background: rgba(16,185,129,0.15);  color: #10B981; }
+.badge-warning  { background: rgba(245,158,11,0.15);  color: #F59E0B; }
+.badge-danger   { background: rgba(239,68,68,0.15);   color: #EF4444; }
+.badge-primary  { background: rgba(108,99,255,0.15);  color: #6C63FF; }
+.badge-secondary{ background: rgba(34,211,238,0.12);  color: #22D3EE; }
+.badge-muted    { background: var(--bg-faint); color: var(--fg-4); }
+
+/* ─── FAB ─────────────────────────────────────────────────────────────────── */
+.fab {
+  position: fixed;
+  bottom: 80px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6C63FF, #22D3EE);
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 50;
+  box-shadow: 0 4px 24px rgba(108,99,255,0.5);
+  transition: all 0.2s ease;
+}
+
+.fab:hover {
+  transform: scale(1.1) rotate(45deg);
+  box-shadow: 0 6px 30px rgba(108,99,255,0.6);
+}
+
+@media (min-width: 1024px) {
+  .fab { bottom: 32px; right: 32px; }
+}
+
+/* ─── Progress bar ────────────────────────────────────────────────────────── */
+.progress-bar {
+  height: 8px;
+  background: var(--bg-faint);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 1s ease-out;
+}
+
+/* ─── Alert card ──────────────────────────────────────────────────────────── */
+.alert-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border-left: 3px solid;
+}
+
+.alert-card.warning  { background: rgba(245,158,11,0.08);  border-left-color: #F59E0B; }
+.alert-card.danger   { background: rgba(239,68,68,0.08);   border-left-color: #EF4444; }
+.alert-card.success  { background: rgba(16,185,129,0.08);  border-left-color: #10B981; }
+.alert-card.info     { background: rgba(108,99,255,0.08);  border-left-color: #6C63FF; }
+
+/* ─── Skeleton shimmer ────────────────────────────────────────────────────── */
+.skeleton {
+  background: var(--bg-faint);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+/* ─── Animations ──────────────────────────────────────────────────────────── */
+@keyframes shimmer    { to { left: 100%; } }
+@keyframes fadeIn     { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp    { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slideInRight { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+.animate-fade-in      { animation: fadeIn 0.3s ease; }
+.animate-slide-up     { animation: slideUp 0.4s ease; }
+.animate-slide-in-right { animation: slideInRight 0.35s ease; }
+
+/* ─── Select dropdown custom arrow ────────────────────────────────────────── */
+select.input-field {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.light select.input-field {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,0.45)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
+
+select.input-field option {
+  background-color: #1E1E2E;
+  color: rgba(255,255,255,0.85);
+}
+
+.light select.input-field option {
+  background-color: #fff;
+  color: rgba(0,0,0,0.88);
+}
