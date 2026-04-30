@@ -1269,3 +1269,42 @@ export async function uploadImportFile(formData: FormData) {
   return data.publicUrl;
 }
 
+// ── Aliases for CarteraClient ─────────────────────────────────────────────────
+export const createInvestment   = createPosicion;
+export const updateInvestment   = updatePosicion;
+export const deleteInvestment   = deletePosicion;
+
+export const createPhysicalAsset = createValuation;
+
+export const createFixedDeposit = createPlazoFijo;
+export const updateFixedDeposit = updatePlazoFijo;
+export const deleteFixedDeposit = deletePlazoFijo;
+
+export async function deleteAccount(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  const { error } = await supabase.from("cuentas").delete().eq("id", id).eq("usuario_id", user.id);
+  if (error) throw error;
+  revalidatePath("/app/configuracion");
+}
+
+export async function updatePhysicalAsset(id: string, updates: Partial<Omit<Tables['valuaciones']['Insert'], 'usuario_id'>>) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  const { data, error } = await supabase.from("valuaciones").update(updates).eq("id", id).eq("usuario_id", user.id).select().single();
+  if (error) throw error;
+  revalidatePath("/app/cartera");
+  return data;
+}
+
+export async function deletePhysicalAsset(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  const { error } = await supabase.from("valuaciones").delete().eq("id", id).eq("usuario_id", user.id);
+  if (error) throw error;
+  revalidatePath("/app/cartera");
+}
+

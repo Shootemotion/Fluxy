@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { createMovement, createPasivo, createRecurrente } from "@/lib/actions";
 import { toast } from "sonner";
+import { formatCurrency } from "@/lib/utils";
 
 interface IAClientProps {
   accounts:   any[];
@@ -182,25 +183,31 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
       if (editado.tipoAccion === "pasivo") {
         await createPasivo({
           nombre: editado.descripcion || "Préstamo",
-          monto_total: editado.monto,
+          tipo: "prestamo",
+          monto_original: editado.monto,
+          saldo_pendiente: editado.monto,
           moneda: editado.moneda,
           tasa_interes: editado.tasa_interes,
           sistema_amortizacion: editado.sistema_amortizacion as any,
-          cuotas: editado.cuotas,
+          n_cuotas: editado.cuotas,
           fecha_inicio: editado.fecha,
         });
         toast.success("Préstamo registrado automáticamente");
       } else if (editado.tipoAccion === "recurrente") {
         await createRecurrente({
-          descripcion: editado.descripcion || "Pago en cuotas",
-          monto_base: editado.monto,
+          nombre: editado.descripcion || "Pago en cuotas",
+          monto: editado.monto,
           moneda: editado.moneda,
-          tipo_recurrencia: "mensual",
-          dia_mes: parseInt(editado.fecha.split("-")[2]),
+          tipo: "gasto",
+          dia_del_mes: parseInt(editado.fecha.split("-")[2]) || 1,
+          fecha_inicio: editado.fecha,
+          fecha_fin: null,
           categoria_id: editado.categoriaId || null,
           cuenta_id: editado.cuentaId || null,
-          activo: true,
+          tasa_interes: null,
+          es_cuotas: editado.cuotas > 1,
           cuotas_totales: editado.cuotas > 1 ? editado.cuotas : null,
+          activo: true,
         });
         toast.success("Pago en cuotas registrado automáticamente");
       } else {

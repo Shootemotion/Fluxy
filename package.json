@@ -52,5 +52,8 @@
     "typescript": "^6.0.2",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@types/papaparse": "^5.5.2"
   }
 }
