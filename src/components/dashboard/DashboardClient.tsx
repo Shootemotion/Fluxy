@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { formatCurrency, getProgressColor } from "@/lib/utils";
 import Link from "next/link";
 import {
@@ -97,12 +97,28 @@ const FUT_LABELS:  Record<number, string> = { 0: "No", 6: "6M", 12: "1A", 24: "2
 type HistRange = typeof HIST_OPTIONS[number];
 type FutRange  = typeof FUT_OPTIONS[number];
 
+type TcRate = "oficial" | "mep" | "blue";
+
 export default function DashboardClient({
   initialStats, initialMovements, initialGoals, initialMonthlyStats, userNombre,
 }: DashboardClientProps) {
   const monthName = new Date().toLocaleDateString("es-AR", { month: "long", year: "numeric" });
   const [histRange,   setHistRange]   = useState<HistRange>(6);
   const [futureRange, setFutureRange] = useState<FutRange>(6);
+
+  // USD rate widget
+  const [tc, setTc]                   = useState<{ oficial: number; mep: number; blue: number; fecha: string } | null>(null);
+  const [tcLoading, setTcLoading]     = useState(false);
+  const [selectedRate, setSelectedRate] = useState<TcRate>("mep");
+
+  useEffect(() => {
+    setTcLoading(true);
+    fetch("/api/tc")
+      .then(r => r.json())
+      .then(d => setTc(d))
+      .catch(() => {})
+      .finally(() => setTcLoading(false));
+  }, []);
 
   const stats = initialStats || { ingresos: 0, gastos: 0, ahorro: 0, tasaAhorro: 0, totalBalance: 0 };
   const hasData = initialMovements.length > 0;
@@ -190,6 +206,56 @@ export default function DashboardClient({
               <span style={{ color: "var(--fg-5)" }}>Plazos Fijos</span>
               <span className="font-mono font-semibold" style={{ color: "#F59E0B" }}>{formatCurrency(stats.assets?.fixedDeposits || 0, "ARS", true)}</span>
             </div>
+        </div>
+      </div>
+
+      {/* USD widget */}
+      <div className="glass-card p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+            style={{ background: "rgba(245,158,11,0.12)" }}>💵</div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--fg-5)" }}>
+              Patrimonio en USD
+            </p>
+            {tcLoading ? (
+              <div className="h-6 w-28 rounded animate-pulse mt-0.5" style={{ background: "rgba(255,255,255,0.07)" }} />
+            ) : tc ? (
+              <p className="text-xl font-bold" style={{ color: "#F59E0B" }}>
+                {new Intl.NumberFormat("es-AR", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 })
+                  .format(stats.totalBalance / (selectedRate === "oficial" ? tc.oficial : selectedRate === "blue" ? tc.blue : tc.mep))}
+              </p>
+            ) : (
+              <p className="text-sm" style={{ color: "var(--fg-5)" }}>Sin cotización</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Rate selector */}
+          <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.10)" }}>
+            {(["oficial", "mep", "blue"] as TcRate[]).map(r => (
+              <button key={r} onClick={() => setSelectedRate(r)}
+                className="px-3 py-1.5 text-xs font-semibold capitalize transition-all"
+                style={{
+                  background: selectedRate === r ? "rgba(245,158,11,0.25)" : "transparent",
+                  color: selectedRate === r ? "#F59E0B" : "var(--fg-5)",
+                }}>
+                {r.charAt(0).toUpperCase() + r.slice(1)}
+              </button>
+            ))}
+          </div>
+          {/* Rate value */}
+          {tc && (
+            <div className="text-right">
+              <p className="text-sm font-mono font-bold" style={{ color: "var(--fg-2)" }}>
+                {formatCurrency(selectedRate === "oficial" ? tc.oficial : selectedRate === "blue" ? tc.blue : tc.mep, "ARS")}
+              </p>
+              <p className="text-[10px]" style={{ color: "var(--fg-6)" }}>
+                USD {selectedRate} · {new Date(tc.fecha).toLocaleDateString("es-AR")}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

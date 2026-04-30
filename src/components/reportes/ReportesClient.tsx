@@ -57,14 +57,23 @@ function fmtShort(n: number) {
   return `$${n.toFixed(0)}`;
 }
 
+interface PortfolioData {
+  posiciones: any[];
+  plazos: any[];
+  valuaciones: any[];
+  accounts: any[];
+  tcUsd: number;
+}
+
 interface Props {
   initialMovements: ReportMovement[];
   initialPeriod: Period;
   initialStart: string;
   initialEnd: string;
+  portfolioData?: PortfolioData;
 }
 
-export default function ReportesClient({ initialMovements, initialPeriod, initialStart, initialEnd }: Props) {
+export default function ReportesClient({ initialMovements, initialPeriod, initialStart, initialEnd, portfolioData }: Props) {
   const [period, setPeriod]           = useState<Period>(initialPeriod);
   const [customFrom, setCustomFrom]   = useState(initialStart);
   const [customTo, setCustomTo]       = useState(initialEnd);
@@ -149,6 +158,64 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
     movements.filter(m => m.tipo === "gasto").slice(0, 15),
     [movements]
   );
+
+  // ── Flow by account ───────────────────────────────────────────────────────
+  const accountFlowData = useMemo(() => {
+    const map: Record<string, { nombre: string; ingresos: number; gastos: number }> = {};
+    for (const m of movements) {
+      const key  = m.cuenta_origen?.nombre || "Sin cuenta";
+      if (!map[key]) map[key] = { nombre: key, ingresos: 0, gastos: 0 };
+      if (m.tipo === "ingreso") map[key].ingresos += Number(m.monto);
+      if (m.tipo === "gasto")   map[key].gastos   += Number(m.monto);
+    }
+    return Object.values(map).sort((a, b) => (b.ingresos + b.gastos) - (a.ingresos + a.gastos));
+  }, [movements]);
+
+  // ── Flow by currency ──────────────────────────────────────────────────────
+  const currencyFlowData = useMemo(() => {
+    const map: Record<string, { moneda: string; ingresos: number; gastos: number; ahorro: number }> = {};
+    for (const m of movements) {
+      const cur = m.moneda || "ARS";
+      if (!map[cur]) map[cur] = { moneda: cur, ingresos: 0, gastos: 0, ahorro: 0 };
+      if (m.tipo === "ingreso") map[cur].ingresos += Number(m.monto);
+      if (m.tipo === "gasto")   map[cur].gastos   += Number(m.monto);
+    }
+    for (const k of Object.keys(map)) map[k].ahorro = map[k].ingresos - map[k].gastos;
+    return Object.values(map).sort((a, b) => (b.ingresos + b.gastos) - (a.ingresos + a.gastos));
+  }, [movements]);
+
+  // ── Portfolio breakdown ───────────────────────────────────────────────────
+  const portfolioBreakdown = useMemo(() => {
+    if (!portfolioData) return null;
+    const { posiciones, plazos, valuaciones, accounts, tcUsd } = portfolioData;
+    const toArs = (monto: number, moneda: string) => moneda === "USD" ? monto * tcUsd : monto;
+    const items: { nombre: string; valor: number; color: string }[] = [];
+
+    const cuentasTotal = accounts.reduce((s: number, a: any) => s + toArs(Number(a.saldo_inicial), a.moneda), 0);
+    if (cuentasTotal > 0) items.push({ nombre: "Cuentas", valor: cuentasTotal, color: "#22D3EE" });
+
+    posiciones.forEach((p: any) => {
+      if (Number(p.monto_valorizado) > 0)
+        items.push({ nombre: p.ticker || p.nombre, valor: toArs(Number(p.monto_valorizado), p.moneda), color: "#6C63FF" });
+    });
+
+    plazos.forEach((p: any) => {
+      const ganancia = Number(p.monto_inicial) * (Number(p.tasa_tna) / 100) * (Number(p.plazo_dias) / 365);
+      const total = Number(p.monto_inicial) + ganancia;
+      if (total > 0) items.push({ nombre: p.entidad || "Plazo Fijo", valor: toArs(total, p.moneda), color: "#F59E0B" });
+    });
+
+    valuaciones.forEach((v: any) => {
+      if (Number(v.monto) > 0)
+        items.push({ nombre: v.instrumento_nombre, valor: toArs(Number(v.monto), v.moneda), color: "#10B981" });
+    });
+
+    const total = items.reduce((s, i) => s + i.valor, 0);
+    const top6 = items.sort((a, b) => b.valor - a.valor).slice(0, 8);
+    const rest = items.slice(8).reduce((s, i) => s + i.valor, 0);
+    if (rest > 0) top6.push({ nombre: "Otros", valor: rest, color: "#6B7280" });
+    return { items: top6, total };
+  }, [portfolioData]);
 
   // ── CSV export ────────────────────────────────────────────────────────────
   function exportCSV() {
@@ -437,6 +504,129 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
               </table>
             </div>
           </div>
+
+          {/* Flow by account */}
+          {accountFlowData.length > 0 && (
+            <div className="glass-card p-5">
+              <h2 className="text-sm font-semibold mb-4" style={{ color: "rgba(255,255,255,0.75)" }}>
+                Flujo por cuenta
+              </h2>
+              <ResponsiveContainer width="100%" height={Math.max(160, accountFlowData.length * 52)}>
+                <BarChart data={accountFlowData} layout="vertical" margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                  <XAxis type="number" tickFormatter={fmtShort} tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="nombre" width={100}
+                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 11 }} axisLine={false} tickLine={false}
+                    tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 14) + "…" : v} />
+                  <Tooltip
+                    contentStyle={{ background: "#1E1B3A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                    formatter={((value: any, name: string) => [formatCurrency(Number(value ?? 0), "ARS"), name === "ingresos" ? "Ingresos" : "Gastos"]) as any}
+                    cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                  />
+                  <Bar dataKey="ingresos" fill="#10B981" fillOpacity={0.85} radius={[0, 4, 4, 0]} maxBarSize={16} />
+                  <Bar dataKey="gastos"   fill="#EF4444" fillOpacity={0.85} radius={[0, 4, 4, 0]} maxBarSize={16} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Flow by currency */}
+          {currencyFlowData.length > 0 && (
+            <div className="glass-card p-5">
+              <h2 className="text-sm font-semibold mb-4" style={{ color: "rgba(255,255,255,0.75)" }}>
+                Flujo por moneda
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {currencyFlowData.map(c => (
+                  <div key={c.moneda} className="rounded-xl p-4 space-y-3"
+                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.45)" }}>
+                      {c.moneda === "USD" ? "🇺🇸 USD" : c.moneda === "ARS" ? "🇦🇷 ARS" : c.moneda}
+                    </p>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>Ingresos</span>
+                        <span className="font-mono font-bold text-sm text-emerald-400">{formatCurrency(c.ingresos, c.moneda)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>Gastos</span>
+                        <span className="font-mono font-bold text-sm text-rose-400">{formatCurrency(c.gastos, c.moneda)}</span>
+                      </div>
+                      <div className="h-px" style={{ background: "rgba(255,255,255,0.07)" }} />
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.55)" }}>Ahorro neto</span>
+                        <span className={`font-mono font-bold text-sm ${c.ahorro >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                          {c.ahorro >= 0 ? "+" : ""}{formatCurrency(c.ahorro, c.moneda)}
+                        </span>
+                      </div>
+                      {c.ingresos > 0 && (
+                        <div className="pt-1">
+                          <div className="flex justify-between text-[10px] mb-1" style={{ color: "rgba(255,255,255,0.35)" }}>
+                            <span>Tasa de ahorro</span>
+                            <span>{((c.ahorro / c.ingresos) * 100).toFixed(1)}%</span>
+                          </div>
+                          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+                            <div className="h-full rounded-full" style={{
+                              width: `${Math.max(0, Math.min(100, (c.ahorro / c.ingresos) * 100))}%`,
+                              background: c.ahorro >= 0 ? "#10B981" : "#EF4444",
+                            }} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Portfolio breakdown */}
+          {portfolioBreakdown && portfolioBreakdown.total > 0 && (
+            <div className="glass-card p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.75)" }}>
+                  Composición de cartera
+                </h2>
+                <span className="text-xs font-mono font-bold" style={{ color: "rgba(255,255,255,0.55)" }}>
+                  Total: {fmtShort(portfolioBreakdown.total)}
+                </span>
+              </div>
+              <div className="flex flex-col lg:flex-row gap-6 items-center">
+                <ResponsiveContainer width="100%" height={200} className="lg:max-w-[220px]">
+                  <PieChart>
+                    <Pie data={portfolioBreakdown.items} cx="50%" cy="50%"
+                      innerRadius={50} outerRadius={90} paddingAngle={2} dataKey="valor">
+                      {portfolioBreakdown.items.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} stroke="transparent" />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ background: "#1E1B3A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                      formatter={((value: any, _: any, props: any) => [formatCurrency(Number(value ?? 0), "ARS"), props.payload.nombre]) as any}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex-1 space-y-2 w-full">
+                  {portfolioBreakdown.items.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: item.color }} />
+                        <span className="text-sm truncate" style={{ color: "rgba(255,255,255,0.65)" }}>{item.nombre}</span>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
+                          {portfolioBreakdown.total > 0 ? ((item.valor / portfolioBreakdown.total) * 100).toFixed(1) : "0"}%
+                        </span>
+                        <span className="font-semibold text-xs font-mono" style={{ color: "rgba(255,255,255,0.8)" }}>
+                          {fmtShort(item.valor)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Summary stats footer */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
