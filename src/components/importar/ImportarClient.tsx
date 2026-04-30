@@ -439,7 +439,7 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
       } else {
         const hasNeg = [rawMonto, rawMontoTotal, rawMontoRest]
           .some(v => v != null && String(v).trim().startsWith("-"));
-        tipo = hasNeg ? "gasto" : "gasto";
+        tipo = hasNeg ? "gasto" : "ingreso";
       }
 
       // ── Moneda ────────────────────────────────────────────────────────
@@ -1080,6 +1080,23 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                         <span className={r.tipo === "ingreso" ? "text-emerald-400" : "text-rose-400"}>
                           {r.tipo === "ingreso" ? "+" : "-"}${r.monto.toLocaleString("es-AR")}
                         </span>
+                        {r.selected && (
+                          <button
+                            onClick={() => {
+                              const newRows = [...processedRows];
+                              newRows[actualIndex].tipo = newRows[actualIndex].tipo === "ingreso" ? "gasto" : "ingreso";
+                              setProcessedRows(newRows);
+                            }}
+                            className="block ml-auto mt-1 text-[9px] px-1.5 py-0.5 rounded border transition-colors"
+                            style={{
+                              borderColor: r.tipo === "ingreso" ? "rgba(16,185,129,0.3)" : "rgba(244,63,94,0.3)",
+                              color: r.tipo === "ingreso" ? "rgba(16,185,129,0.7)" : "rgba(244,63,94,0.7)",
+                            }}
+                            title="Cambiar entre Ingreso y Gasto"
+                          >
+                            {r.tipo === "ingreso" ? "Ingreso ↕" : "Gasto ↕"}
+                          </button>
+                        )}
                       </td>
                     </tr>
                     );
