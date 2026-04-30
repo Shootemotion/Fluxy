@@ -786,7 +786,7 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                       </td>
                       <td className="text-xs font-mono align-top pt-3">{r.fecha}</td>
                       <td className="align-top pt-3">
-                        <div className="text-sm truncate max-w-[200px]" title={r.descripcion}>{r.descripcion}</div>
+                        <div className="text-sm break-words max-w-[340px]" title={r.descripcion}>{r.descripcion}</div>
                         
                         {!r.isCuota && r.selected && (
                           <button 
