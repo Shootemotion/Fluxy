@@ -75,6 +75,10 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
   const [monedaDefault, setMonedaDefault] = useState("ARS");
   const [tipoDefault, setTipoDefault] = useState<"gasto" | "ingreso" | "auto">("auto");
 
+  // Tipo de resumen y fecha cierre (tarjeta)
+  const [tipoResumen, setTipoResumen] = useState<"cuenta" | "tarjeta" | null>(null);
+  const [fechaCierre, setFechaCierre] = useState("");
+
   // Find category by name heuristically
   function guessCategory(desc: string) {
     const lower = desc.toLowerCase();
@@ -191,6 +195,10 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
   const onDrop = useCallback((files: File[]) => {
     const file = files[0];
     if (!file) return;
+    if (tipoResumen === "tarjeta" && !fechaCierre) {
+      toast.error("Ingresá la fecha de cierre del resumen antes de subir el archivo.");
+      return;
+    }
     setArchivo(file);
 
     const reader = new FileReader();
@@ -394,17 +402,35 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
         finalMontoTotal = parseFloat(finalMontoTotal.toFixed(2));
       if (isNaN(finalMontoNum) || finalMontoNum <= 0) continue;
 
+      // ── Para tarjeta: recalcular cuota actual usando fecha cierre ────────
+      // La fecha de compra es parsedDate; la fecha del movimiento real es el cierre
+      let fechaMovimiento = parsedDate;
+      if (tipoResumen === "tarjeta" && fechaCierre && isCuota) {
+        // Cuántos meses pasaron desde la compra hasta el cierre
+        const dCompra = new Date(parsedDate + "T12:00:00");
+        const dCierre = new Date(fechaCierre + "T12:00:00");
+        const mesesTranscurridos =
+          (dCierre.getFullYear() - dCompra.getFullYear()) * 12 +
+          (dCierre.getMonth() - dCompra.getMonth());
+        // La cuota que aparece en este resumen = meses transcurridos + 1
+        const cuotaDelResumen = Math.max(1, mesesTranscurridos + 1);
+        if (cuotaDelResumen > cTotales) continue; // ya pagada completamente → skip
+        cActual = cuotaDelResumen;
+        // Si tenemos cuotas_pendientes del archivo las respetamos, sino las calculamos
+        if (cPendientes == null) cPendientes = cTotales - cActual + 1;
+        fechaMovimiento = fechaCierre; // el débito ocurre en la fecha de cierre
+      }
+
       // ── Tipo (ingreso / gasto) ────────────────────────────────────────
       let tipo: "ingreso" | "gasto";
       if (tipoDefault !== "auto") {
         tipo = tipoDefault;
+      } else if (tipoResumen === "tarjeta") {
+        tipo = "gasto"; // los resumenes de tarjeta siempre son gastos
       } else {
         const hasNeg = [rawMonto, rawMontoTotal, rawMontoRest]
           .some(v => v != null && String(v).trim().startsWith("-"));
-        tipo = hasNeg ? "ingreso" : "gasto"; // negative in statement = payment = ingreso? No — negatives in bank = outflow = gasto
-        // Actually: if value is negative in statement → gasto (expense)
-        // Bank exports: positive = credit (ingreso), negative = debit (gasto)
-        tipo = hasNeg ? "gasto" : "gasto"; // default all to gasto; user can override
+        tipo = hasNeg ? "gasto" : "gasto";
       }
 
       // ── Moneda ────────────────────────────────────────────────────────
@@ -412,18 +438,21 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
         ? String(r[colMoneda]).trim().toUpperCase()
         : monedaDefault;
 
-      // ── Referencia en descripción ──────────────────────────────────────
-      const refVal = colRef ? String(r[colRef] || "").trim() : "";
+      // ── Descripción con info de cuotas ────────────────────────────────
       let finalDesc = desc;
       if (isCuota) {
-        const pendStr = cPendientes != null ? ` · ${cPendientes} restante${cPendientes !== 1 ? "s" : ""}` : "";
+        const pendStr = cPendientes != null ? ` · ${cPendientes} pend.` : "";
         finalDesc = `💳 ${desc} (${cActual}/${cTotales}${pendStr})`;
       }
 
       const cat = guessCategory(desc);
 
+      // crearRecurrente solo si quedan cuotas FUTURAS (después de la actual)
+      const cuotasFuturas = cPendientes != null ? cPendientes - 1 : cTotales - cActual;
+      const debeCrearRecurrente = isCuota && cuotasFuturas > 0;
+
       rows.push({
-        fecha: parsedDate,
+        fecha: fechaMovimiento,
         descripcion: finalDesc,
         monto: finalMontoNum,
         tipo,
@@ -436,8 +465,8 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
         cuotaActual: cActual,
         cuotasTotales: cTotales,
         montoTotal: finalMontoTotal,
-        crearRecurrente: isCuota && (cPendientes == null ? cActual === 1 : (cPendientes ?? 0) > 1),
-        originalData: r,
+        crearRecurrente: debeCrearRecurrente,
+        originalData: { ...r, _fechaCompra: parsedDate, _cuotasFuturas: cuotasFuturas },
       });
     }
     return rows;
@@ -506,32 +535,40 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
       // 2. Insertar en bloque
       await createMovementsBulk(toImport);
 
-      // 3. Crear recurrentes si corresponde
-      const recurrentesToCreate = toImport.filter(r => r.isCuota && r.crearRecurrente && r.cuotasTotales && r.montoTotal);
+      // 3. Crear recurrentes para cuotas FUTURAS (las que vienen después de este resumen)
+      const recurrentesToCreate = toImport.filter(r => r.isCuota && r.crearRecurrente);
       for (const r of recurrentesToCreate) {
         try {
-          // Retrocedemos la fecha de inicio tantos meses como cuotas ya hayan pasado
-          const cuotasPasadas = (r.cuotaActual || 1) - 1;
+          const cuotasFuturas: number = r.originalData?._cuotasFuturas ?? (r.cuotasTotales! - r.cuotaActual!);
+          if (cuotasFuturas <= 0) continue;
+
+          // El recurrente empieza el mes siguiente a la fecha del movimiento (cierre o compra)
           const start = new Date(r.fecha + "T12:00:00");
-          start.setMonth(start.getMonth() - cuotasPasadas);
-          
+          start.setMonth(start.getMonth() + 1);
+          start.setDate(Math.min(start.getDate(), 28));
+
           const end = new Date(start.getTime());
-          end.setMonth(end.getMonth() + r.cuotasTotales!);
-          
+          end.setMonth(end.getMonth() + cuotasFuturas);
+
+          const nombreLimpio = r.descripcion
+            .replace(/💳\s*/g, "")
+            .replace(/\(\d{1,3}\/\d{1,3}[^)]*\)/g, "")
+            .trim();
+
           await createRecurrente({
-            nombre: r.descripcion.replace(/\(\d{1,2}\s*(?:\/|de)\s*\d{1,2}\)|💳/g, '').trim(),
+            nombre: `💳 ${nombreLimpio}`,
             tipo: "gasto",
             monto: r.monto,
-            moneda: "ARS",
+            moneda: r.moneda || "ARS",
             categoria_id: r.categoria_id || null,
             cuenta_id: r.cuenta_origen_id,
             dia_del_mes: start.getDate(),
-            fecha_inicio: start.toISOString().split('T')[0],
-            fecha_fin: end.toISOString().split('T')[0],
+            fecha_inicio: start.toISOString().split("T")[0],
+            fecha_fin: end.toISOString().split("T")[0],
             es_cuotas: true,
-            cuotas_totales: r.cuotasTotales!,
+            cuotas_totales: cuotasFuturas,
             tasa_interes: null,
-            activo: true
+            activo: true,
           });
         } catch (e) {
           console.warn("Could not create recurrente for", r.descripcion, e);
@@ -612,36 +649,113 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
         ))}
       </div>
 
-      {/* Step 0: Upload */}
+      {/* Step 0: Tipo de resumen + Upload */}
       {paso === 0 && (
-        <div className="animate-fade-in">
-          <div
-            {...getRootProps()}
-            className="glass-card p-12 text-center cursor-pointer transition-all"
-            style={{
-              border: isDragActive ? "2px dashed #6C63FF" : "2px dashed rgba(255,255,255,0.1)",
-              background: isDragActive ? "rgba(108,99,255,0.05)" : undefined,
-            }}
-          >
-            <input {...getInputProps()} />
-            <div className="text-5xl mb-4">{isDragActive ? "📂" : "📥"}</div>
-            <p className="font-semibold text-lg mb-2" style={{ color: "rgba(255,255,255,0.9)" }}>
-              {isDragActive ? "Soltá el archivo aquí" : "Arrastrá tu archivo CSV o Excel"}
-            </p>
-            <p className="text-sm mb-4" style={{ color: "rgba(255,255,255,0.45)" }}>O hacé click para seleccionar</p>
-            <span className="badge badge-muted text-sm">.xlsx · .csv</span>
-          </div>
-          
-          <div className="mt-6 glass-card p-5 alert-card info">
-            <span className="text-xl">💡</span>
+        <div className="animate-fade-in space-y-5">
+
+          {/* A: Elegir tipo de resumen */}
+          {!tipoResumen ? (
             <div>
-              <p className="font-semibold text-sm mb-1 text-blue-100">Tips para la importación</p>
-              <p className="text-xs text-blue-200/70">
-                Asegurate de que tu archivo tenga al menos una columna con la Fecha, otra con el Monto y otra con la Descripción. 
-                El sistema detectará automáticamente ingresos (números positivos) y gastos (negativos).
+              <p className="text-sm font-semibold mb-4" style={{ color: "rgba(255,255,255,0.70)" }}>
+                ¿Qué tipo de archivo vas a importar?
               </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {[
+                  {
+                    key: "cuenta" as const,
+                    icon: "🏦",
+                    title: "Resumen de cuenta",
+                    desc: "Caja de ahorro, cuenta corriente, billetera virtual. Cada fila es un movimiento real.",
+                  },
+                  {
+                    key: "tarjeta" as const,
+                    icon: "💳",
+                    title: "Resumen de tarjeta de crédito",
+                    desc: "Cada fila puede ser una cuota de una compra en cuotas. Se usa la fecha de cierre para calcular pagos pasados y futuros.",
+                  },
+                ].map(opt => (
+                  <button key={opt.key} onClick={() => {
+                    setTipoResumen(opt.key);
+                    if (opt.key === "tarjeta") {
+                      setTipoDefault("gasto");
+                    } else {
+                      setTipoDefault("auto");
+                    }
+                  }}
+                    className="glass-card p-5 text-left transition-all hover:border-purple-500/40"
+                    style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+                    <div className="text-3xl mb-3">{opt.icon}</div>
+                    <p className="font-semibold text-sm mb-1" style={{ color: "rgba(255,255,255,0.90)" }}>{opt.title}</p>
+                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }}>{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Indicador tipo seleccionado + cambiar */}
+              <div className="flex items-center gap-3">
+                <span className="text-lg">{tipoResumen === "tarjeta" ? "💳" : "🏦"}</span>
+                <p className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.80)" }}>
+                  {tipoResumen === "tarjeta" ? "Resumen de tarjeta de crédito" : "Resumen de cuenta"}
+                </p>
+                <button onClick={() => { setTipoResumen(null); setFechaCierre(""); }}
+                  className="text-xs px-2 py-0.5 rounded-lg ml-auto" style={{ background: "rgba(255,255,255,0.06)", color: "var(--fg-5)" }}>
+                  Cambiar
+                </button>
+              </div>
+
+              {/* Fecha cierre (solo tarjeta) */}
+              {tipoResumen === "tarjeta" && (
+                <div className="glass-card p-4 space-y-3" style={{ border: "1px solid rgba(108,99,255,0.25)" }}>
+                  <p className="text-xs font-semibold uppercase" style={{ color: "#A5A0FF" }}>Datos del resumen</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "rgba(255,255,255,0.40)" }}>
+                        Fecha de cierre *
+                      </label>
+                      <input type="date" className="input-field" value={fechaCierre}
+                        onChange={e => setFechaCierre(e.target.value)} required />
+                      <p className="text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.30)" }}>
+                        Es la fecha en que cerró el período del resumen. Se usa para calcular qué cuota es la actual y cuáles ya se pagaron.
+                      </p>
+                    </div>
+                    <div className="rounded-xl p-3 text-xs space-y-1.5" style={{ background: "rgba(108,99,255,0.06)", border: "1px solid rgba(108,99,255,0.15)" }}>
+                      <p className="font-semibold" style={{ color: "#A5A0FF" }}>¿Cómo funciona?</p>
+                      <p style={{ color: "rgba(255,255,255,0.45)" }}>
+                        · La "Fecha" del archivo = fecha de compra<br/>
+                        · Se calcula qué cuota corresponde al cierre<br/>
+                        · Las compras ya totalmente pagas se omiten<br/>
+                        · Se crea un periódico solo para cuotas futuras
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dropzone */}
+              <div
+                {...getRootProps()}
+                className="glass-card p-10 text-center cursor-pointer transition-all"
+                style={{
+                  border: isDragActive ? "2px dashed #6C63FF" : "2px dashed rgba(255,255,255,0.10)",
+                  background: isDragActive ? "rgba(108,99,255,0.05)" : undefined,
+                }}
+              >
+                <input {...getInputProps()} />
+                <div className="text-4xl mb-3">{isDragActive ? "📂" : "📥"}</div>
+                <p className="font-semibold mb-1" style={{ color: "rgba(255,255,255,0.85)" }}>
+                  {isDragActive ? "Soltá el archivo aquí" : "Arrastrá tu archivo o hacé click"}
+                </p>
+                <p className="text-xs mb-3" style={{ color: "rgba(255,255,255,0.35)" }}>
+                  {tipoResumen === "tarjeta" && !fechaCierre
+                    ? "⚠️ Ingresá la fecha de cierre antes de subir el archivo"
+                    : "Formatos aceptados: .xlsx · .csv"}
+                </p>
+                <span className="badge badge-muted text-xs">.xlsx · .csv</span>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -937,7 +1051,7 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
           <p className="text-sm mb-6" style={{ color: "rgba(255,255,255,0.45)" }}>Los movimientos han sido registrados y el archivo guardado como resguardo.</p>
           
           <div className="flex gap-4 justify-center">
-            <button onClick={() => { setPaso(0); setArchivo(null); setProcessedRows([]); setRawRows([]); }} className="btn-secondary">
+            <button onClick={() => { setPaso(0); setArchivo(null); setProcessedRows([]); setRawRows([]); setTipoResumen(null); setFechaCierre(""); }} className="btn-secondary">
               Importar otro
             </button>
             <a href="/app/movimientos" className="btn-primary" style={{ padding: "10px 20px" }}>
