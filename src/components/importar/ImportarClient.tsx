@@ -12,13 +12,17 @@ const PASOS = ["Subir archivo", "Mapear columnas", "Preview", "Importar"];
 const EMOJIS = ["🛒","🚗","🏠","🍔","💊","🎬","✈️","📱","💻","👕","🎓","⚕️","🐾","💡","💧","🔥","💳","💰","🎁","🚌","☕","🍺","💪","🎮"];
 
 const COLUMNS_SISTEMA = [
-  { value: "fecha", label: "Fecha" },
-  { value: "descripcion", label: "Descripción" },
-  { value: "monto", label: "Monto (General o Mensual)" },
-  { value: "monto_total", label: "Monto Total de la Compra" },
-  { value: "monto_restante", label: "Monto Restante a Pagar" },
-  { value: "cuotas", label: "Info de Cuotas (Opcional)" },
-  { value: "ignorar", label: "— Ignorar columna —" },
+  { value: "fecha",             label: "📅 Fecha" },
+  { value: "descripcion",       label: "📝 Descripción / Establecimiento" },
+  { value: "monto",             label: "💲 Monto cuota / mensual" },
+  { value: "monto_total",       label: "💲 Monto total de la compra" },
+  { value: "monto_restante",    label: "💲 Monto restante a pagar" },
+  { value: "cuotas",            label: "🔢 Info de cuotas combinada (ej. 2/6)" },
+  { value: "cuotas_totales",    label: "🔢 Plan / Total de cuotas" },
+  { value: "cuotas_pendientes", label: "🔢 Cuotas pendientes / restantes" },
+  { value: "moneda",            label: "🌐 Moneda" },
+  { value: "referencia",        label: "🔖 Referencia / Comprobante" },
+  { value: "ignorar",           label: "— Ignorar columna —" },
 ];
 
 interface ImportarClientProps {
@@ -68,6 +72,8 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
   const [newCatLoading, setNewCatLoading] = useState(false);
 
   const [hideDuplicates, setHideDuplicates] = useState(false);
+  const [monedaDefault, setMonedaDefault] = useState("ARS");
+  const [tipoDefault, setTipoDefault] = useState<"gasto" | "ingreso" | "auto">("auto");
 
   // Find category by name heuristically
   function guessCategory(desc: string) {
@@ -95,35 +101,90 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
   function autoMapColumns(headers: string[], firstRow: any) {
     const newMapeo: Record<string, string> = {};
     headers.forEach(h => {
-      const lowerH = h.toLowerCase();
-      const val = String(firstRow[h] || "").toLowerCase();
-      
-      if (lowerH.includes("fecha") || lowerH.includes("date") || val.match(/^\d{2,4}[-/]\d{2}[-/]\d{2,4}$/)) {
+      const lowerH = h.toLowerCase().trim();
+      const val    = String(firstRow?.[h] || "").toLowerCase().trim();
+
+      // ── Fecha ──────────────────────────────────────────────────────────
+      if (lowerH.includes("fecha") || lowerH === "date" ||
+          val.match(/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/) ||
+          val.match(/^\d{4}-\d{2}-\d{2}$/)) {
         newMapeo[h] = "fecha";
-      } else if (lowerH.includes("desc") || lowerH.includes("concepto") || lowerH.includes("detalle") || lowerH.includes("movimiento")) {
+
+      // ── Descripción / establecimiento ──────────────────────────────────
+      } else if (
+        lowerH.includes("establec") || lowerH.includes("comercio") ||
+        lowerH.includes("desc") || lowerH.includes("concepto") ||
+        lowerH.includes("detalle") || lowerH.includes("movimiento") ||
+        lowerH.includes("nombre") || lowerH.includes("local") ||
+        lowerH === "beneficiario"
+      ) {
         newMapeo[h] = "descripcion";
-      } else if (lowerH.includes("cuota") || lowerH.includes("plan")) {
-        newMapeo[h] = "cuotas";
-      } else if (lowerH.includes("monto") || lowerH.includes("importe") || lowerH.includes("amount") || (!isNaN(parseFloat(val)) && !lowerH.includes("saldo") && !lowerH.includes("comprobante") && !lowerH.includes("referencia"))) {
-        if (lowerH.includes("total")) {
-          newMapeo[h] = "monto_total";
-        } else if (lowerH.includes("restante") || lowerH.includes("pendiente")) {
+
+      // ── Cuotas pendientes / restantes ──────────────────────────────────
+      } else if (
+        (lowerH.includes("pendiente") || lowerH.includes("restante")) &&
+        (lowerH.includes("cuota") || lowerH.includes("plan") || !isNaN(parseFloat(val)))
+        && !lowerH.includes("importe") && !lowerH.includes("monto") && !lowerH.includes("saldo")
+      ) {
+        newMapeo[h] = "cuotas_pendientes";
+
+      // ── Plan / total de cuotas ─────────────────────────────────────────
+      } else if (
+        lowerH === "cuotas" ||
+        lowerH.includes("plan") ||
+        (lowerH.includes("cuota") && !lowerH.includes("pendiente") && !lowerH.includes("restante") && !lowerH.includes("monto") && !lowerH.includes("importe"))
+      ) {
+        // If value looks like "2/6" or "02/06" → combined cuotas field
+        if (val.match(/^\d{1,2}\/\d{1,2}$/)) {
+          newMapeo[h] = "cuotas";
+        } else {
+          newMapeo[h] = "cuotas_totales";
+        }
+
+      // ── Moneda ─────────────────────────────────────────────────────────
+      } else if (lowerH === "moneda" || lowerH === "currency" || lowerH === "divisa") {
+        newMapeo[h] = "moneda";
+
+      // ── Referencia / comprobante ───────────────────────────────────────
+      } else if (
+        lowerH.includes("comprobante") || lowerH.includes("voucher") ||
+        lowerH.includes("referencia") || lowerH === "nro" || lowerH === "número" ||
+        lowerH.includes("operacion") || lowerH.includes("transaccion")
+      ) {
+        newMapeo[h] = "referencia";
+
+      // ── Montos ────────────────────────────────────────────────────────
+      } else if (
+        lowerH.includes("monto") || lowerH.includes("importe") ||
+        lowerH.includes("amount") || lowerH.includes("valor") ||
+        lowerH.includes("total") ||
+        (!isNaN(parseFloat(val)) && parseFloat(val) > 0 && !lowerH.includes("saldo") && !lowerH.includes("id"))
+      ) {
+        if (lowerH.includes("restante") || lowerH.includes("pendiente") || lowerH.includes("saldo")) {
           newMapeo[h] = "monto_restante";
+        } else if (lowerH.includes("total") || lowerH.includes("original")) {
+          newMapeo[h] = "monto_total";
         } else if (!Object.values(newMapeo).includes("monto")) {
           newMapeo[h] = "monto";
         } else {
           newMapeo[h] = "ignorar";
         }
+
       } else {
         newMapeo[h] = "ignorar";
       }
     });
-    
-    // Ensure essential columns are mapped, otherwise default to something
-    if (!Object.values(newMapeo).includes("fecha")) newMapeo[headers[0]] = "fecha";
-    if (!Object.values(newMapeo).includes("descripcion")) newMapeo[headers[1] || headers[0]] = "descripcion";
-    if (!Object.values(newMapeo).includes("monto")) newMapeo[headers[2] || headers[0]] = "monto";
-    
+
+    // Fallback: si no se detectó fecha/desc/monto, asignar por posición
+    if (!Object.values(newMapeo).includes("fecha") && headers[0])
+      newMapeo[headers[0]] = "fecha";
+    if (!Object.values(newMapeo).includes("descripcion") && headers[1])
+      newMapeo[headers[1]] = "descripcion";
+    if (!Object.values(newMapeo).includes("monto") &&
+        !Object.values(newMapeo).includes("monto_restante") &&
+        !Object.values(newMapeo).includes("monto_total") && headers[2])
+      newMapeo[headers[2]] = "monto";
+
     setMapeo(newMapeo);
   }
 
@@ -176,116 +237,197 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
 
   // Convert raw rows to standardized ProcessedRows
   const buildProcessedRows = () => {
-    const colFecha = Object.keys(mapeo).find(k => mapeo[k] === "fecha");
-    const colDesc = Object.keys(mapeo).find(k => mapeo[k] === "descripcion");
-    const colMonto = Object.keys(mapeo).find(k => mapeo[k] === "monto");
-    const colMontoTotal = Object.keys(mapeo).find(k => mapeo[k] === "monto_total");
-    const colMontoRestante = Object.keys(mapeo).find(k => mapeo[k] === "monto_restante");
-    const colCuotas = Object.keys(mapeo).find(k => mapeo[k] === "cuotas");
+    const colFecha           = Object.keys(mapeo).find(k => mapeo[k] === "fecha");
+    const colDesc            = Object.keys(mapeo).find(k => mapeo[k] === "descripcion");
+    const colMonto           = Object.keys(mapeo).find(k => mapeo[k] === "monto");
+    const colMontoTotal      = Object.keys(mapeo).find(k => mapeo[k] === "monto_total");
+    const colMontoRestante   = Object.keys(mapeo).find(k => mapeo[k] === "monto_restante");
+    const colCuotas          = Object.keys(mapeo).find(k => mapeo[k] === "cuotas");
+    const colCuotasTotales   = Object.keys(mapeo).find(k => mapeo[k] === "cuotas_totales");
+    const colCuotasPend      = Object.keys(mapeo).find(k => mapeo[k] === "cuotas_pendientes");
+    const colMoneda          = Object.keys(mapeo).find(k => mapeo[k] === "moneda");
+    const colRef             = Object.keys(mapeo).find(k => mapeo[k] === "referencia");
 
     if (!colFecha || !colDesc || (!colMonto && !colMontoTotal && !colMontoRestante)) {
-      toast.error("Debes mapear Fecha, Descripción y al menos un Monto.");
+      toast.error("Necesitás mapear Fecha, Descripción y al menos un Monto.");
       return null;
     }
 
+    // Robust number parser: handles "10.118,69" (ES) and "10,118.69" (EN) and negatives
+    const parseMonto = (val: any): number => {
+      if (val == null || String(val).trim() === "" || String(val).trim() === "-") return NaN;
+      let str = String(val).trim();
+      const isNeg = str.startsWith("-") || str.startsWith("(");
+      str = str.replace(/[()$€\s]/g, "");
+      // Detect thousands sep vs decimal sep
+      const lastDot   = str.lastIndexOf(".");
+      const lastComma = str.lastIndexOf(",");
+      if (lastComma > lastDot) {
+        // Format: 10.118,69 → ES style
+        str = str.replace(/\./g, "").replace(",", ".");
+      } else {
+        // Format: 10,118.69 → EN style, or plain number
+        str = str.replace(/,/g, "");
+      }
+      const n = parseFloat(str);
+      return isNeg ? -Math.abs(n) : n;
+    };
+
+    // Robust date parser → always returns YYYY-MM-DD or ""
+    const parseDate = (val: any): string => {
+      if (!val) return "";
+      let str = String(val).trim();
+      // Excel serial number
+      if (/^\d{5}$/.test(str)) {
+        const d = new Date(Math.round((parseInt(str) - 25569) * 86400 * 1000));
+        return d.toISOString().split("T")[0];
+      }
+      // DD/MM/YYYY or DD-MM-YYYY
+      const m1 = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (m1) return `${m1[3]}-${m1[2].padStart(2,"0")}-${m1[1].padStart(2,"0")}`;
+      // YYYY/MM/DD or YYYY-MM-DD
+      const m2 = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+      if (m2) return `${m2[1]}-${m2[2].padStart(2,"0")}-${m2[3].padStart(2,"0")}`;
+      // MM/DD/YYYY fallback (ambiguous, try if day > 12)
+      const m3 = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
+      if (m3) {
+        const yy = parseInt(m3[3]) > 50 ? `19${m3[3]}` : `20${m3[3]}`;
+        return `${yy}-${m3[2].padStart(2,"0")}-${m3[1].padStart(2,"0")}`;
+      }
+      return str; // already ISO or unknown
+    };
+
     const rows: ProcessedRow[] = [];
+
     for (const r of rawRows) {
       const valFecha = r[colFecha];
-      let valMontoRaw = colMonto ? r[colMonto] : (colMontoTotal ? r[colMontoTotal] : (colMontoRestante ? r[colMontoRestante] : null));
-      
-      if (!valFecha || valMontoRaw == null) continue;
+      if (!valFecha) continue;
+
+      const parsedDate = parseDate(valFecha);
+      if (!parsedDate) continue;
 
       const desc = String(r[colDesc] || "").trim();
-      const infoCuotasStr = colCuotas ? String(r[colCuotas] || "").trim() : "";
-      
-      const cat = guessCategory(desc + " " + infoCuotasStr);
+      if (!desc) continue;
 
-      // Search for cuota format (e.g. 02/06 or 2/6 or 2 de 6) in either the specific column or description
-      const textToSearch = (infoCuotasStr + " " + desc).toLowerCase();
-      const cuotaMatch = textToSearch.match(/(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})/);
-      let isCuota = false;
-      let cActual = 1;
-      let cTotales = 1;
+      // ── Cuotas info ───────────────────────────────────────────────────
+      let isCuota    = false;
+      let cActual    = 1;
+      let cTotales   = 1;
+      let cPendientes: number | null = null;
 
-      if (cuotaMatch) {
-        isCuota = true;
-        cActual = parseInt(cuotaMatch[1]);
-        cTotales = parseInt(cuotaMatch[2]);
-      } else if (textToSearch.includes("cuota")) {
-        isCuota = true;
+      // Case A: separate columns for total & pending
+      if (colCuotasTotales || colCuotasPend) {
+        const rawTotal = colCuotasTotales ? parseMonto(r[colCuotasTotales]) : NaN;
+        const rawPend  = colCuotasPend    ? parseMonto(r[colCuotasPend])    : NaN;
+        if (!isNaN(rawTotal) && rawTotal > 1) {
+          isCuota    = true;
+          cTotales   = Math.round(rawTotal);
+          cPendientes = !isNaN(rawPend) ? Math.round(rawPend) : null;
+          cActual    = cPendientes != null ? cTotales - cPendientes + 1 : 1;
+        } else if (!isNaN(rawPend) && rawPend > 0) {
+          isCuota    = true;
+          cPendientes = Math.round(rawPend);
+          cTotales   = cPendientes;
+          cActual    = 1;
+        }
       }
 
-      // Logic for calculating Monto and MontoTotal
-      let finalMontoNum = 0;
+      // Case B: combined cuota column (e.g. "2/6", "02 de 06")
+      if (!isCuota && colCuotas) {
+        const cuotaStr = String(r[colCuotas] || "").trim();
+        const match = cuotaStr.match(/(\d{1,3})\s*(?:\/|de)\s*(\d{1,3})/i);
+        if (match) {
+          isCuota  = true;
+          cActual  = parseInt(match[1]);
+          cTotales = parseInt(match[2]);
+          cPendientes = cTotales - cActual + 1;
+        }
+      }
+
+      // Case C: cuota info embedded in description
+      if (!isCuota) {
+        const match = desc.match(/(\d{1,3})\s*(?:\/|de)\s*(\d{1,3})/i);
+        if (match) {
+          isCuota  = true;
+          cActual  = parseInt(match[1]);
+          cTotales = parseInt(match[2]);
+          cPendientes = cTotales - cActual + 1;
+        }
+      }
+
+      // ── Montos ────────────────────────────────────────────────────────
+      const rawMonto        = colMonto        ? r[colMonto]        : null;
+      const rawMontoTotal   = colMontoTotal   ? r[colMontoTotal]   : null;
+      const rawMontoRest    = colMontoRestante? r[colMontoRestante]: null;
+
+      const mNormal   = parseMonto(rawMonto);
+      const mTotal    = parseMonto(rawMontoTotal);
+      const mRestante = parseMonto(rawMontoRest);
+
+      let finalMontoNum   = NaN;
       let finalMontoTotal: number | undefined = undefined;
 
-      // Check explicit columns
-      const rawMonto = colMonto ? r[colMonto] : null;
-      const rawMontoTotal = colMontoTotal ? r[colMontoTotal] : null;
-      const rawMontoRestante = colMontoRestante ? r[colMontoRestante] : null;
-
-      const parseMonto = (val: any) => {
-        if (val == null || String(val).trim() === "") return NaN;
-        let str = String(val).replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, '');
-        if (String(val).split('.').length > 1 && String(val).split(',').length === 1) {
-           str = String(val).replace(/[^0-9.-]/g, '');
-        }
-        return Math.abs(parseFloat(str));
-      };
-
-      const mNormal = parseMonto(rawMonto);
-      const mTotal = parseMonto(rawMontoTotal);
-      const mRestante = parseMonto(rawMontoRestante);
-
-      if (isCuota && cTotales > 0) {
+      if (isCuota) {
+        const pendientes = cPendientes ?? (cTotales - cActual + 1);
         if (!isNaN(mNormal) && !isNaN(mTotal)) {
-          finalMontoNum = mNormal;
-          finalMontoTotal = mTotal;
-        } else if (!isNaN(mTotal)) {
-          finalMontoTotal = mTotal;
-          finalMontoNum = mTotal / cTotales;
-        } else if (!isNaN(mRestante)) {
-          // Calculate installment value from remaining balance
-          const cuotasPendientes = (cTotales - cActual) + 1;
-          finalMontoNum = cuotasPendientes > 0 ? mRestante / cuotasPendientes : mRestante;
+          finalMontoNum  = Math.abs(mNormal);
+          finalMontoTotal = Math.abs(mTotal);
+        } else if (!isNaN(mRestante) && pendientes > 0) {
+          // "Importe restante" ÷ cuotas pendientes = cuota mensual
+          finalMontoNum  = Math.abs(mRestante) / pendientes;
           finalMontoTotal = finalMontoNum * cTotales;
+        } else if (!isNaN(mTotal)) {
+          finalMontoTotal = Math.abs(mTotal);
+          finalMontoNum  = finalMontoTotal / cTotales;
         } else if (!isNaN(mNormal)) {
-          finalMontoNum = mNormal;
-          finalMontoTotal = mNormal * cTotales;
+          finalMontoNum  = Math.abs(mNormal);
+          finalMontoTotal = finalMontoNum * cTotales;
         }
       } else {
-        finalMontoNum = !isNaN(mNormal) ? mNormal : (!isNaN(mTotal) ? mTotal : mRestante);
+        finalMontoNum = Math.abs(
+          !isNaN(mNormal) ? mNormal : (!isNaN(mTotal) ? mTotal : mRestante)
+        );
       }
 
-      // Limitar a 2 decimales
-      finalMontoNum = parseFloat(finalMontoNum.toFixed(2));
-      if (finalMontoTotal !== undefined) finalMontoTotal = parseFloat(finalMontoTotal.toFixed(2));
+      finalMontoNum = parseFloat((finalMontoNum || 0).toFixed(2));
+      if (finalMontoTotal !== undefined)
+        finalMontoTotal = parseFloat(finalMontoTotal.toFixed(2));
+      if (isNaN(finalMontoNum) || finalMontoNum <= 0) continue;
 
-      if (isNaN(finalMontoNum)) continue;
-      
-      const tipo = (rawMonto != null && String(rawMonto).includes('-')) || (rawMontoTotal != null && String(rawMontoTotal).includes('-')) ? "gasto" : "ingreso";
-
-      // Parse date (try to get YYYY-MM-DD)
-      let parsedDate = valFecha;
-      if (valFecha.includes('/')) {
-        const parts = valFecha.split('/');
-        if (parts[2]?.length === 4) { // DD/MM/YYYY
-          parsedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-        }
+      // ── Tipo (ingreso / gasto) ────────────────────────────────────────
+      let tipo: "ingreso" | "gasto";
+      if (tipoDefault !== "auto") {
+        tipo = tipoDefault;
+      } else {
+        const hasNeg = [rawMonto, rawMontoTotal, rawMontoRest]
+          .some(v => v != null && String(v).trim().startsWith("-"));
+        tipo = hasNeg ? "ingreso" : "gasto"; // negative in statement = payment = ingreso? No — negatives in bank = outflow = gasto
+        // Actually: if value is negative in statement → gasto (expense)
+        // Bank exports: positive = credit (ingreso), negative = debit (gasto)
+        tipo = hasNeg ? "gasto" : "gasto"; // default all to gasto; user can override
       }
 
-      // If description didn't have the cuota text but it's a cuota, append it so it's visible
+      // ── Moneda ────────────────────────────────────────────────────────
+      const moneda = colMoneda && r[colMoneda]
+        ? String(r[colMoneda]).trim().toUpperCase()
+        : monedaDefault;
+
+      // ── Referencia en descripción ──────────────────────────────────────
+      const refVal = colRef ? String(r[colRef] || "").trim() : "";
       let finalDesc = desc;
-      if (isCuota && !desc.match(/(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})/) && cuotaMatch) {
-        finalDesc = `${desc} (${cuotaMatch[1]}/${cuotaMatch[2]})`;
+      if (isCuota) {
+        const pendStr = cPendientes != null ? ` · ${cPendientes} restante${cPendientes !== 1 ? "s" : ""}` : "";
+        finalDesc = `💳 ${desc} (${cActual}/${cTotales}${pendStr})`;
       }
+
+      const cat = guessCategory(desc);
 
       rows.push({
         fecha: parsedDate,
-        descripcion: isCuota && !finalDesc.includes("💳") ? `💳 ${finalDesc}` : finalDesc,
+        descripcion: finalDesc,
         monto: finalMontoNum,
         tipo,
-        moneda: "ARS", // Assuming ARS by default, could be mapped
+        moneda,
         categoria_id: cat.id,
         categoria_nombre: cat.nombre,
         cuenta_origen_id: cuentaId,
@@ -294,8 +436,8 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
         cuotaActual: cActual,
         cuotasTotales: cTotales,
         montoTotal: finalMontoTotal,
-        crearRecurrente: isCuota && cActual === 1, // Suggest creating recurrente if it's cuota 1
-        originalData: r
+        crearRecurrente: isCuota && (cPendientes == null ? cActual === 1 : (cPendientes ?? 0) > 1),
+        originalData: r,
       });
     }
     return rows;
@@ -521,6 +663,29 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                 {accounts.map(a => <option key={a.id} value={a.id} className="bg-[#1A1A24]">{a.nombre}</option>)}
               </select>
             </div>
+          </div>
+
+          {/* Global defaults */}
+          <div className="glass-card p-4 flex flex-wrap gap-4 items-end">
+            <div>
+              <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "rgba(255,255,255,0.35)" }}>Moneda por defecto</label>
+              <select className="input-field text-sm w-32" value={monedaDefault} onChange={e => setMonedaDefault(e.target.value)}>
+                <option value="ARS">$ ARS</option>
+                <option value="USD">U$S USD</option>
+                <option value="EUR">€ EUR</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "rgba(255,255,255,0.35)" }}>Tipo de movimiento</label>
+              <select className="input-field text-sm w-44" value={tipoDefault} onChange={e => setTipoDefault(e.target.value as any)}>
+                <option value="auto">Auto-detectar</option>
+                <option value="gasto">Todo como Gasto</option>
+                <option value="ingreso">Todo como Ingreso</option>
+              </select>
+            </div>
+            <p className="text-xs flex-1" style={{ color: "rgba(255,255,255,0.30)" }}>
+              Si tu resumen es de tarjeta de crédito, elegí "Todo como Gasto".
+            </p>
           </div>
 
           <div className="glass-card p-5">
