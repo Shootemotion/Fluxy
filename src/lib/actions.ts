@@ -1269,6 +1269,38 @@ export async function uploadImportFile(formData: FormData) {
   return data.publicUrl;
 }
 
+// ── Reportes ──────────────────────────────────────────────────────────────────
+
+export async function getMovementsForReport(startDate: string, endDate: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("movimientos")
+    .select(`
+      id, fecha, tipo, monto, moneda, descripcion,
+      categorias (nombre, icono, color),
+      cuenta_origen:cuenta_origen_id (nombre, icono)
+    `)
+    .eq("usuario_id", user.id)
+    .in("tipo", ["ingreso", "gasto"])
+    .gte("fecha", startDate)
+    .lte("fecha", endDate)
+    .order("fecha", { ascending: false });
+
+  return (data || []) as unknown as Array<{
+    id: string;
+    fecha: string;
+    tipo: "ingreso" | "gasto";
+    monto: number;
+    moneda: string;
+    descripcion: string | null;
+    categorias: { nombre: string; icono: string | null; color: string } | null;
+    cuenta_origen: { nombre: string; icono: string | null } | null;
+  }>;
+}
+
 // ── Aliases for CarteraClient ─────────────────────────────────────────────────
 export const createInvestment   = createPosicion;
 export const updateInvestment   = updatePosicion;
