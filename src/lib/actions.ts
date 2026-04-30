@@ -1249,9 +1249,18 @@ export async function createMovementsBulk(movements: any[]) {
   if (!user) throw new Error("Unauthorized");
 
   const rowsToInsert = movements.map(m => ({
-    ...m,
+    fecha: m.fecha,
+    tipo: m.tipo,
+    monto: m.monto,
+    moneda: m.moneda || "ARS",
+    descripcion: m.descripcion,
+    categoria_id: m.categoria_id || null,
+    cuenta_origen_id: m.cuenta_origen_id || null,
+    cuenta_destino_id: m.cuenta_destino_id || null,
+    objetivo_id: m.objetivo_id || null,
+    tipo_cambio: m.tipo_cambio || null,
     usuario_id: user.id,
-    metodo_carga: 'importado'
+    metodo_carga: 'importado' as const,
   }));
 
   const { data, error } = await supabase.from("movimientos")
