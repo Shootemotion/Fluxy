@@ -355,13 +355,20 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
       }
 
       // Case C: cuota info embedded in description
-      if (!isCuota) {
+      // Disabled for bank statements (tipoResumen === "cuenta") because bank
+      // descriptions commonly contain dates like "24/04/2026" that produce false positives.
+      if (!isCuota && tipoResumen !== "cuenta") {
         const match = desc.match(/(\d{1,3})\s*(?:\/|de)\s*(\d{1,3})/i);
         if (match) {
-          isCuota  = true;
-          cActual  = parseInt(match[1]);
-          cTotales = parseInt(match[2]);
-          cPendientes = cTotales - cActual + 1;
+          const ca = parseInt(match[1]);
+          const ct = parseInt(match[2]);
+          // Reject date-like false positives (e.g. 24/04) and unrealistic plans
+          if (ca >= 1 && ct >= 2 && ct <= 60 && ca <= ct) {
+            isCuota  = true;
+            cActual  = ca;
+            cTotales = ct;
+            cPendientes = cTotales - cActual + 1;
+          }
         }
       }
 
@@ -503,6 +510,10 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
   const handlePreview = async () => {
     if (!cuentaId) {
       toast.error("Seleccioná una cuenta para importar");
+      return;
+    }
+    if (tipoResumen === "tarjeta" && !fechaCierre) {
+      toast.error("La fecha de cierre es obligatoria para resúmenes de tarjeta");
       return;
     }
     setLoading(true);
@@ -948,7 +959,7 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                           />
                         )}
 
-                        {!r.isCuota && r.selected && (
+                        {!r.isCuota && !r.isPastInstallment && r.selected && (
                           <button 
                             onClick={() => {
                               const newRows = [...processedRows];
@@ -963,7 +974,7 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                           </button>
                         )}
 
-                        {r.isCuota && r.selected && (
+                        {r.isCuota && !r.isPastInstallment && r.selected && (
                           <div className="mt-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 space-y-2">
                             <div className="flex justify-between items-center mb-1">
                               <span className="text-[10px] font-semibold text-blue-400">💳 Detalle de Cuotas</span>
