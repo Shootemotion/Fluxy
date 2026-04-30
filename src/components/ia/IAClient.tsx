@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { formatCurrency } from "@/lib/utils";
-import { createMovement } from "@/lib/actions";
+import { createMovement, createPasivo, createRecurrente } from "@/lib/actions";
+import { toast } from "sonner";
 
 interface IAClientProps {
   accounts:   any[];
@@ -15,21 +15,47 @@ function parseNaturalLanguage(text: string, accounts: any[], goals: any[]) {
   const lower = text.toLowerCase();
 
   // Amount
-  const amountMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:pesos?|ars|\$|usd|dólares?)?/);
-  const monto = amountMatch ? parseFloat(amountMatch[1].replace(",", ".")) : null;
+  const amountMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:pesos?|ars|\$|usd|dólares?|mil|millones|k|m)?/);
+  let monto = amountMatch ? parseFloat(amountMatch[1].replace(",", ".")) : null;
+  if (lower.includes("mil ") && monto) monto *= 1000;
+  if (lower.includes("millon") && monto) monto *= 1000000;
 
   // Currency
   const moneda = lower.includes("dólar") || lower.includes("usd") || lower.includes("u$s") ? "USD" : "ARS";
 
-  // Movement type
+  // Movement type and Action Type
+  let tipoAccion: "movimiento" | "pasivo" | "recurrente" = "movimiento";
   let tipo = "gasto";
   let tipoLabel = "Gasto";
-  if (lower.includes("cobr") || lower.includes("ingres") || lower.includes("recibi") || lower.includes("sueldo") || lower.includes("entraron")) {
-    tipo = "ingreso"; tipoLabel = "Ingreso";
-  } else if (lower.includes("fondo") || lower.includes("objetivo") || lower.includes("sum") || lower.includes("apart") || lower.includes("aport")) {
-    tipo = "aporte_objetivo"; tipoLabel = "Aporte a Objetivo";
-  } else if (lower.includes("pas") || lower.includes("transfer")) {
-    tipo = "transferencia"; tipoLabel = "Transferencia";
+  let sistema_amortizacion = "Frances";
+  let tasa_interes = 0;
+  let cuotas = 1;
+
+  // Detect Loans / Credit Card Installments
+  if (lower.includes("prestamo") || lower.includes("préstamo") || lower.includes("crédito") || lower.includes("credito") && !lower.includes("tarjeta")) {
+    tipoAccion = "pasivo";
+    tipoLabel = "Préstamo (Pasivo)";
+    if (lower.includes("uva")) sistema_amortizacion = "UVA";
+    if (lower.includes("alem")) sistema_amortizacion = "Aleman";
+    if (lower.includes("americano")) sistema_amortizacion = "Americano";
+    const tasaMatch = lower.match(/(\d+(?:[.,]\d+)?)%\s*(?:de\s+)?inter/);
+    if (tasaMatch) tasa_interes = parseFloat(tasaMatch[1].replace(",", "."));
+    const cuotasMatch = lower.match(/(\d+)\s+cuotas/);
+    if (cuotasMatch) cuotas = parseInt(cuotasMatch[1]);
+  } else if (lower.includes("cuotas") || lower.includes("tarjeta de crédito") || lower.includes("tarjeta de credito") || lower.includes("suscripción") || lower.includes("netflix") || lower.includes("spotify")) {
+    tipoAccion = "recurrente";
+    tipoLabel = lower.includes("cuotas") ? "Pago en Cuotas" : "Gasto Recurrente";
+    tipo = "gasto"; // Base type
+    const cuotasMatch = lower.match(/(\d+)\s+cuotas/);
+    if (cuotasMatch) cuotas = parseInt(cuotasMatch[1]);
+  } else {
+    if (lower.includes("cobr") || lower.includes("ingres") || lower.includes("recibi") || lower.includes("sueldo") || lower.includes("entraron")) {
+      tipo = "ingreso"; tipoLabel = "Ingreso";
+    } else if (lower.includes("fondo") || lower.includes("objetivo") || lower.includes("sum") || lower.includes("apart") || lower.includes("aport")) {
+      tipo = "aporte_objetivo"; tipoLabel = "Aporte a Objetivo";
+    } else if (lower.includes("pas") || lower.includes("transfer")) {
+      tipo = "transferencia"; tipoLabel = "Transferencia";
+    }
   }
 
   // Date
@@ -60,6 +86,7 @@ function parseNaturalLanguage(text: string, accounts: any[], goals: any[]) {
   else if (lower.includes("médico") || lower.includes("farmacia") || lower.includes("salud")) categoriaNombre = "Salud";
   else if (lower.includes("sueldo") || lower.includes("salario")) categoriaNombre = "Sueldo";
   else if (lower.includes("freelance") || lower.includes("proyecto") || lower.includes("cliente")) categoriaNombre = "Freelance";
+  else if (lower.includes("tarjeta") || lower.includes("cuotas")) categoriaNombre = "Deudas";
 
   // Match goal from real goals list
   let objetivoId = "";
@@ -73,30 +100,33 @@ function parseNaturalLanguage(text: string, accounts: any[], goals: any[]) {
   if (lower.includes("vacacion"))   objetivoId = goals.find((o: any) => o.nombre.toLowerCase().includes("vacacion"))?.id  ?? "";
 
   // Clean up description
-  const descripcion = text
+  let descripcion = text
     .replace(/registr[aáa]\s*/i, "").replace(/anot[aáa]\s*/i, "")
     .replace(/sum[aáa]\s*/i, "").replace(/cobr[eé]\s*/i, "")
     .replace(/gast[eé]\s*/i, "").replace(/pas[eé]\s*/i, "")
     .replace(/hoy/i, "").replace(/ayer/i, "").trim();
 
   return {
+    tipoAccion,
     tipo, tipoLabel, monto, moneda, fecha,
     categoriaNombre,
     objetivoId,
     descripcion,
     cuentaId:   accounts[0]?.id   ?? "",
     cuentaNombre: accounts[0]?.nombre ?? "",
+    sistema_amortizacion,
+    tasa_interes,
+    cuotas,
     confianza: monto ? 85 : 45,
   };
 }
 
 const EJEMPLOS = [
   "registrá un gasto de 85000 pesos en alquiler hoy",
-  "sumá 50000 al fondo vacaciones",
+  "saqué un préstamo francés de 5000000 en 12 cuotas",
+  "compré una heladera por 800000 en 6 cuotas con tarjeta",
   "cobré 1000000 de cliente",
   "pasé 200000 del banco al fondo de emergencia",
-  "gasté 150000 en expensas el 5 de abril",
-  "compré nafta por 45000 pesos ayer",
 ];
 
 export default function IAClient({ accounts, goals, categories }: IAClientProps) {
@@ -130,7 +160,7 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Tu navegador no soporta reconocimiento de voz. Usá Chrome.");
+      toast.error("Tu navegador no soporta reconocimiento de voz. Usá Chrome.");
       return;
     }
     const recognition = new SpeechRecognition();
@@ -149,26 +179,54 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
     if (!editado || editado.monto == null) return;
     setLoading(true);
     try {
-      await createMovement({
-        tipo:              editado.tipo as any,
-        monto:             editado.monto,
-        moneda:            editado.moneda,
-        fecha:             editado.fecha,
-        descripcion:       editado.descripcion || null,
-        categoria_id:      editado.categoriaId || null,
-        cuenta_origen_id:  editado.cuentaId || null,
-        cuenta_destino_id: null,
-        objetivo_id:       editado.objetivoId || null,
-        tipo_cambio:       null,
-        metodo_carga:      "ia",
-      });
+      if (editado.tipoAccion === "pasivo") {
+        await createPasivo({
+          nombre: editado.descripcion || "Préstamo",
+          monto_total: editado.monto,
+          moneda: editado.moneda,
+          tasa_interes: editado.tasa_interes,
+          sistema_amortizacion: editado.sistema_amortizacion as any,
+          cuotas: editado.cuotas,
+          fecha_inicio: editado.fecha,
+        });
+        toast.success("Préstamo registrado automáticamente");
+      } else if (editado.tipoAccion === "recurrente") {
+        await createRecurrente({
+          descripcion: editado.descripcion || "Pago en cuotas",
+          monto_base: editado.monto,
+          moneda: editado.moneda,
+          tipo_recurrencia: "mensual",
+          dia_mes: parseInt(editado.fecha.split("-")[2]),
+          categoria_id: editado.categoriaId || null,
+          cuenta_id: editado.cuentaId || null,
+          activo: true,
+          cuotas_totales: editado.cuotas > 1 ? editado.cuotas : null,
+        });
+        toast.success("Pago en cuotas registrado automáticamente");
+      } else {
+        await createMovement({
+          tipo:              editado.tipo as any,
+          monto:             editado.monto,
+          moneda:            editado.moneda,
+          fecha:             editado.fecha,
+          descripcion:       editado.descripcion || null,
+          categoria_id:      editado.categoriaId || null,
+          cuenta_origen_id:  editado.cuentaId || null,
+          cuenta_destino_id: null,
+          objetivo_id:       editado.objetivoId || null,
+          tipo_cambio:       null,
+          metodo_carga:      "ia",
+        });
+        toast.success("Movimiento registrado automáticamente");
+      }
+
       setPaso("success");
       setTimeout(() => {
         setPaso("input"); setTexto(""); setParsed(null); setEditado(null);
       }, 2000);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error al guardar el movimiento. Revisá los datos e intentá de nuevo.");
+      toast.error("Error al guardar. Revisá los datos e intentá de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -271,20 +329,43 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
             </p>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Tipo</label>
-                <select
-                  className="input-field text-sm"
-                  value={editado.tipo}
-                  onChange={e => setEditado({ ...editado, tipo: e.target.value, tipoLabel: e.target.options[e.target.selectedIndex].text })}
-                >
-                  <option value="ingreso">Ingreso</option>
-                  <option value="gasto">Gasto</option>
-                  <option value="transferencia">Transferencia</option>
-                  <option value="aporte_objetivo">Aporte a Objetivo</option>
-                  <option value="retiro_objetivo">Retiro de Objetivo</option>
-                </select>
-              </div>
+              {editado.tipoAccion === "movimiento" && (
+                <div>
+                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Tipo</label>
+                  <select
+                    className="input-field text-sm"
+                    value={editado.tipo}
+                    onChange={e => setEditado({ ...editado, tipo: e.target.value, tipoLabel: e.target.options[e.target.selectedIndex].text })}
+                  >
+                    <option value="ingreso">Ingreso</option>
+                    <option value="gasto">Gasto</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="aporte_objetivo">Aporte a Objetivo</option>
+                    <option value="retiro_objetivo">Retiro de Objetivo</option>
+                  </select>
+                </div>
+              )}
+              {editado.tipoAccion === "pasivo" && (
+                <div>
+                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Sistema</label>
+                  <select
+                    className="input-field text-sm"
+                    value={editado.sistema_amortizacion}
+                    onChange={e => setEditado({ ...editado, sistema_amortizacion: e.target.value })}
+                  >
+                    <option value="Frances">Francés</option>
+                    <option value="Aleman">Alemán</option>
+                    <option value="Americano">Americano</option>
+                    <option value="UVA">UVA</option>
+                  </select>
+                </div>
+              )}
+              {editado.tipoAccion === "recurrente" && (
+                <div>
+                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Tipo</label>
+                  <input className="input-field text-sm opacity-50" disabled value="Gasto Recurrente / Cuotas" />
+                </div>
+              )}
               <div>
                 <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Monto</label>
                 <div className="flex gap-1">
@@ -315,19 +396,46 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
                   onChange={e => setEditado({ ...editado, fecha: e.target.value })}
                 />
               </div>
-              <div>
-                <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Categoría</label>
-                <select
-                  className="input-field text-sm"
-                  value={editado.categoriaId}
-                  onChange={e => setEditado({ ...editado, categoriaId: e.target.value })}
-                >
-                  <option value="">Sin categoría</option>
-                  {categories.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.icono} {c.nombre}</option>
-                  ))}
-                </select>
-              </div>
+              {(editado.tipoAccion === "movimiento" || editado.tipoAccion === "recurrente") && (
+                <div>
+                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Categoría</label>
+                  <select
+                    className="input-field text-sm"
+                    value={editado.categoriaId}
+                    onChange={e => setEditado({ ...editado, categoriaId: e.target.value })}
+                  >
+                    <option value="">Sin categoría</option>
+                    {categories.map((c: any) => (
+                      <option key={c.id} value={c.id}>{c.icono} {c.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
+              {(editado.tipoAccion === "pasivo" || editado.tipoAccion === "recurrente") && (
+                <div>
+                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Cuotas</label>
+                  <input
+                    type="number"
+                    className="input-field text-sm"
+                    value={editado.cuotas}
+                    onChange={e => setEditado({ ...editado, cuotas: parseInt(e.target.value) })}
+                  />
+                </div>
+              )}
+              
+              {editado.tipoAccion === "pasivo" && (
+                <div>
+                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Tasa Anual (%)</label>
+                  <input
+                    type="number"
+                    className="input-field text-sm"
+                    value={editado.tasa_interes}
+                    onChange={e => setEditado({ ...editado, tasa_interes: parseFloat(e.target.value) })}
+                  />
+                </div>
+              )}
+              
               <div className="col-span-2">
                 <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Descripción</label>
                 <input
@@ -378,7 +486,11 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
               <p className="text-4xl font-bold" style={{ color: editado.tipo === "ingreso" ? "#10B981" : "#EF4444" }}>
                 {formatCurrency(editado.monto, editado.moneda)}
               </p>
-              <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.5)" }}>{editado.descripcion}</p>
+              <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.5)" }}>
+                {editado.descripcion} 
+                {editado.tipoAccion === "pasivo" && ` - ${editado.cuotas} cuotas al ${editado.tasa_interes}%`}
+                {editado.tipoAccion === "recurrente" && ` - ${editado.cuotas} cuotas`}
+              </p>
             </div>
           )}
 

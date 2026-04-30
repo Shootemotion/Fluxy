@@ -95,6 +95,7 @@
 }
 
 /* ─── UI Components ───────────────────────────────────────────────────────── */
+@layer components {
 .glass-card {
   background: var(--bg-card);
   backdrop-filter: blur(12px);
@@ -413,4 +414,5 @@ select.input-field option {
 .light select.input-field option {
   background-color: #fff;
   color: rgba(0,0,0,0.88);
+}
 }

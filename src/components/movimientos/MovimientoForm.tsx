@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createMovement } from "@/lib/actions";
+import { formatDateToLocalISO } from "@/lib/utils";
 import Link from "next/link";
 
 const TIPOS_MOVIMIENTO = [
@@ -27,7 +28,7 @@ export default function MovimientoForm({ accounts, categories, goals }: Movimien
   const [tipo, setTipo] = useState("gasto");
   const [monto, setMonto] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
+  const [fecha, setFecha] = useState(formatDateToLocalISO(new Date()));
   const [categoriaId, setCategoriaId] = useState("");
   const [cuentaId, setCuentaId] = useState(accounts[0]?.id || "");
   const [cuentaDestinoId, setCuentaDestinoId] = useState("");
@@ -64,10 +65,12 @@ export default function MovimientoForm({ accounts, categories, goals }: Movimien
         metodo_carga: 'manual'
       });
       setSuccess(true);
+      setMonto(""); setDescripcion(""); setTipo("gasto"); setObjetivoId("");
+      toast.success("Movimiento registrado");
       setTimeout(() => router.push("/app/movimientos"), 1500);
-    } catch (err) {
+    } catch (err: any) {
+      toast.error("Error al guardar el movimiento");
       console.error(err);
-      alert("Error al guardar el movimiento");
     } finally {
       setLoading(false);
     }
@@ -180,7 +183,7 @@ export default function MovimientoForm({ accounts, categories, goals }: Movimien
           <input
             type="text"
             className="input-field"
-            placeholder="¿En qué gastaste?"
+            placeholder={tipo === "ingreso" ? "Ej: Sueldo, Venta..." : "¿En qué gastaste?"}
             value={descripcion}
             onChange={e => setDescripcion(e.target.value)}
           />

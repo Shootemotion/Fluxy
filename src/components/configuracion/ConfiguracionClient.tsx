@@ -7,6 +7,7 @@ import {
   updateProfile, updatePassword, getMovementsForExport, signInWithGoogle,
 } from "@/lib/actions";
 import Link from "next/link";
+import { toast } from "sonner";
 
 interface ConfiguracionClientProps {
   user: any;
@@ -134,7 +135,7 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
       const url = await signInWithGoogle();
       if (url) window.location.href = url;
     } catch (err: any) {
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message);
     }
   }
 
@@ -146,8 +147,9 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
       const config = { ...(profile?.configuracion || {}), tipo_cambio_usd: val };
       await updateProfile({ configuracion: config });
       setEditingTc(false);
+      toast.success("Tipo de cambio actualizado");
     } catch (err: any) {
-      setTcError(err.message);
+      toast.error("Error: " + err.message);
     } finally {
       setTcLoading(false);
     }
@@ -171,8 +173,9 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
       a.download = `fluxy-${new Date().toISOString().split("T")[0]}.csv`;
       a.click();
       URL.revokeObjectURL(url);
+      toast.success("Movimientos exportados correctamente");
     } catch (err: any) {
-      alert("Error al exportar: " + err.message);
+      toast.error("Error al exportar: " + err.message);
     } finally {
       setExportLoading(false);
     }

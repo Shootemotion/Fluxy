@@ -4,13 +4,16 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import {
-  createValuation, createPosicion, updatePosicion, deletePosicion,
+  createAccount, updateAccount, deleteAccount,
+  createInvestment, updateInvestment, deleteInvestment,
+  createPhysicalAsset, updatePhysicalAsset, deletePhysicalAsset,
+  createFixedDeposit, updateFixedDeposit, deleteFixedDeposit,
   createPasivo, updatePasivo, deletePasivo, registrarPagoPasivo,
   getPagosPasivo, deletePagoPasivo,
   createRecurrente,
-  createPlazoFijo, updatePlazoFijo, deletePlazoFijo,
 } from "@/lib/actions";
 import AmortizacionModal from "./AmortizacionModal";
+import { toast } from "sonner";
 
 interface CarteraClientProps {
   initialValuations: any[];
@@ -117,10 +120,10 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
     if (!instrNombre.trim() || !valMonto) return;
     setValLoading(true);
     try {
-      const nv = await createValuation({ instrumento_nombre: instrNombre.trim(), monto: parseFloat(valMonto), moneda: valMoneda, fecha: valFecha, tipo_cambio: null });
+      const nv = await createPhysicalAsset({ instrumento_nombre: instrNombre.trim(), monto: parseFloat(valMonto), moneda: valMoneda, fecha: valFecha, tipo_cambio: null });
       setValuations(prev => [nv, ...prev]);
       setShowValModal(false); resetValForm();
-    } catch (err: any) { alert("Error: " + err.message); }
+    } catch (err: any) { toast.error("Error: " + err.message); }
     finally { setValLoading(false); }
   }
 
@@ -167,10 +170,10 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
     try {
       const payload = { ticker: posTicker.trim().toUpperCase(), nombre: posNombre.trim()||undefined, cantidad: parseFloat(posCantidad), precio_compra: posPrecio?parseFloat(posPrecio):undefined, moneda: posMoneda, broker: posBroker.trim()||undefined };
       if (editingPos) {
-        const upd = await updatePosicion(editingPos.id, payload);
+        const upd = await updateInvestment(editingPos.id, payload);
         setPosiciones(prev => prev.map(p => p.id === editingPos.id ? upd : p));
       } else {
-        const crd = await createPosicion(payload);
+        const crd = await createInvestment(payload);
         setPosiciones(prev => [...prev, crd]);
       }
       setShowPosModal(false); resetPosForm();
@@ -178,10 +181,18 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
     finally { setPosLoading(false); }
   }
 
-  async function handleDeletePos(id: string) {
-    if (!confirm("¿Eliminar esta posición?")) return;
-    await deletePosicion(id);
-    setPosiciones(prev => prev.filter(p => p.id !== id));
+  function handleDeletePos(id: string) {
+    toast("¿Eliminar esta posición?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () => {
+          await deleteInvestment(id);
+          setPosiciones(prev => prev.filter(p => p.id !== id));
+          toast.success("Eliminado");
+        }
+      },
+      cancel: { label: "Cancelar", onClick: () => {} }
+    });
   }
 
   /* ── UVA value ── */
@@ -240,6 +251,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
   const [pagoCatId, setPagoCatId]               = useState("");
   const [pagoLoading, setPagoLoading]           = useState(false);
   const [pagoError, setPagoError]               = useState("");
+  const [pagoCuotaNumero, setPagoCuotaNumero]   = useState("");
 
   /* ── Payment history per pasivo ── */
   const [expandedPasivoId, setExpandedPasivoId]     = useState<string | null>(null);
@@ -309,10 +321,10 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
         moneda: plMoneda, renovacion_automatica: plRenovacion, notas: plNotas || undefined,
       };
       if (editingPlazo) {
-        const upd = await updatePlazoFijo(editingPlazo.id, payload);
+        const upd = await updateFixedDeposit(editingPlazo.id, payload);
         setPlazos(prev => prev.map(p => p.id === editingPlazo.id ? upd : p));
       } else {
-        const crd = await createPlazoFijo(payload);
+        const crd = await createFixedDeposit(payload);
         setPlazos(prev => [...prev, crd]);
       }
       setShowPlazoModal(false); resetPlazoForm();
@@ -320,10 +332,18 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
     finally { setPlazoLoading(false); }
   }
 
-  async function handleDeletePlazo(id: string) {
-    if (!confirm("\u00BFEliminar este plazo fijo?")) return;
-    await deletePlazoFijo(id);
-    setPlazos(prev => prev.filter(p => p.id !== id));
+  function handleDeletePlazo(id: string) {
+    toast("¿Eliminar este plazo fijo?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () => {
+          await deleteFixedDeposit(id);
+          setPlazos(prev => prev.filter(f => f.id !== id));
+          toast.success("Eliminado");
+        }
+      },
+      cancel: { label: "Cancelar", onClick: () => {} }
+    });
   }
 
   function resetPasivoForm() {
@@ -391,40 +411,27 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
       } else {
         const crd = await createPasivo(payload);
         setPasivos(prev => [...prev, crd]);
-
-        // Auto-create a monthly recurring expense for the loan installment
-        const cuotaFinal = payload.cuota_mensual;
-        if (cuotaFinal && cuotaFinal > 0) {
-          const diaDelMes = pFechaI
-            ? Math.min(new Date(pFechaI + "T12:00:00").getDate(), 28)
-            : 1;
-          await createRecurrente({
-            nombre: `Cuota: ${pNombre.trim()}`,
-            monto: Math.round(cuotaFinal),
-            moneda: pMoneda,
-            tipo: "gasto",
-            dia_del_mes: diaDelMes,
-            fecha_inicio: pFechaI || new Date().toISOString().split("T")[0],
-            fecha_fin: payload.fecha_vencimiento || null,
-            categoria_id: null,
-            cuenta_id: null,
-            tasa_interes: null,
-            activo: true,
-          }).catch(() => { /* non-blocking: recurrente creation is best-effort */ });
-        }
       }
       setShowPasivoModal(false); resetPasivoForm();
     } catch (err: any) { setPasivoError(err.message); }
     finally { setPasivoLoading(false); }
   }
 
-  async function handleDeletePasivo(id: string) {
-    if (!confirm("¿Eliminar este pasivo?")) return;
-    await deletePasivo(id);
-    setPasivos(prev => prev.filter(p => p.id !== id));
+  function handleDeletePasivo(id: string) {
+    toast("¿Eliminar este pasivo?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () => {
+          await deletePasivo(id);
+          setPasivos(prev => prev.filter(p => p.id !== id));
+          toast.success("Eliminado");
+        }
+      },
+      cancel: { label: "Cancelar", onClick: () => {} }
+    });
   }
 
-  function openPagoModal(p: any) {
+  async function openPagoModal(p: any) {
     setPagoTargetPasivo(p);
     const cuotaBase = p.sistema_amortizacion === "uva" && p.cuota_uva && uvaEfectivo
       ? p.cuota_uva * uvaEfectivo : p.cuota_mensual;
@@ -434,20 +441,31 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
     setPagoDesc(`Cuota ${p.nombre}`);
     setPagoCatId("");
     setPagoError("");
+    setPagoLoading(true);
+    try {
+      const hist = await getPagosPasivo(p.id);
+      setPagoCuotaNumero(String(hist.length + 1));
+    } catch {
+      setPagoCuotaNumero("1");
+    } finally {
+      setPagoLoading(false);
+    }
     setShowPagoModal(true);
     if (p.sistema_amortizacion === "uva" && !uvaEfectivo) fetchUva();
   }
 
   async function handleRegistrarPago(e: React.FormEvent) {
     e.preventDefault();
-    if (!pagoMonto || !pagoCuentaId) return;
+    if (!pagoMonto || !pagoCuentaId || !pagoCuotaNumero) return;
     setPagoLoading(true); setPagoError("");
     const montoNum = parseFloat(pagoMonto);
+    const cuotaNumInt = parseInt(pagoCuotaNumero);
     try {
       await registrarPagoPasivo(
         pagoTargetPasivo.id, montoNum, pagoFecha,
         pagoCuentaId || null, pagoDesc || "", pagoCatId || null,
         uvaEfectivo ?? undefined,
+        cuotaNumInt
       );
       // Recalculate displayed balance
       let newSaldo: number;
@@ -484,15 +502,22 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
   }
 
   async function handleDeletePago(pagoId: string, pasivoId: string) {
-    if (!confirm("\u00BFEliminar este pago? El saldo pendiente se recalculará.")) return;
-    try {
-      await deletePagoPasivo(pagoId, pasivoId, uvaEfectivo ?? undefined);
-      const hist = await getPagosPasivo(pasivoId);
-      setPasivoHistory(prev => ({ ...prev, [pasivoId]: hist }));
-      // Reload pasivo list to get new saldo_pendiente
-      const updatedPasivos = await import("@/lib/actions").then(m => m.getPasivos ? m.getPasivos() : null);
-      if (updatedPasivos) setPasivos(updatedPasivos);
-    } catch (err: any) { alert("Error: " + err.message); }
+    toast("¿Eliminar este pago? El saldo pendiente se recalculará.", {
+      action: {
+        label: "Eliminar",
+        onClick: async () => {
+          try {
+            await deletePagoPasivo(pagoId, pasivoId, uvaEfectivo ?? undefined);
+            const hist = await getPagosPasivo(pasivoId);
+            setPasivoHistory(prev => ({ ...prev, [pasivoId]: hist }));
+            // Reload pasivo list to get new saldo_pendiente
+            const updated = await import("@/lib/actions").then(m => m.getPasivos ? m.getPasivos() : null);
+            if (updated) setPasivos(updated);
+          } catch (err: any) { toast.error("Error: " + err.message); }
+        }
+      },
+      cancel: { label: "Cancelar", onClick: () => {} }
+    });
   }
 
   async function openAmortModal(p: any) {
@@ -1427,14 +1452,21 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                     <input type="date" className="input-field" value={pagoFecha} onChange={e => setPagoFecha(e.target.value)} required />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Cuenta débito *</label>
-                  <select className="input-field" value={pagoCuentaId} onChange={e => setPagoCuentaId(e.target.value)} required>
-                    <option value="">Seleccionar cuenta…</option>
-                    {accounts.map((a: any) => (
-                      <option key={a.id} value={a.id}>{a.nombre}</option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>N° de Cuota *</label>
+                    <input type="number" className="input-field font-mono" min="1" step="1"
+                      value={pagoCuotaNumero} onChange={e => setPagoCuotaNumero(e.target.value)} required />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Cuenta débito *</label>
+                    <select className="input-field" value={pagoCuentaId} onChange={e => setPagoCuentaId(e.target.value)} required>
+                      <option value="">Seleccionar cuenta…</option>
+                      {accounts.map((a: any) => (
+                        <option key={a.id} value={a.id}>{a.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Categoría (opcional)</label>

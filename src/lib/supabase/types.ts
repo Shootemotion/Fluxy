@@ -133,6 +133,8 @@ export type Database = {
           fecha_inicio: string;
           fecha_fin: string | null;
           tasa_interes: number | null;
+          es_cuotas: boolean;
+          cuotas_totales: number | null;
           activo: boolean;
           created_at: string;
         };

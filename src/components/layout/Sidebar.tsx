@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 const navItems = [
@@ -71,6 +71,16 @@ export default function Sidebar() {
   const router    = useRouter();
   const supabase  = createClient();
   const [collapsed, setCollapsed] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Check admin
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email === "bmclerif@gmail.com") {
+        setIsAdmin(true);
+      }
+    });
+  }, [supabase.auth]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -136,6 +146,12 @@ export default function Sidebar() {
             </Link>
           );
         })}
+        {isAdmin && (
+          <Link href="/app/admin" className={`sidebar-item ${pathname === "/app/admin" ? "active" : ""}`} title={collapsed ? "Admin" : undefined}>
+            <span className="text-base">👑</span>
+            {!collapsed && <span className="font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-200 to-yellow-500">Admin</span>}
+          </Link>
+        )}
       </nav>
 
       {/* Bottom: User logout */}

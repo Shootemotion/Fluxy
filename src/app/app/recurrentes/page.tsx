@@ -1,4 +1,4 @@
-import { getRecurrentes, getAccounts, getCategories } from "@/lib/actions";
+import { getRecurrentes, getAccounts, getCategories, getMovements } from "@/lib/actions";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import RecurrentesClient from "@/components/recurrentes/RecurrentesClient";
@@ -8,10 +8,11 @@ export default async function RecurrentesPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  const [recurrentes, accounts, categories] = await Promise.all([
+  const [recurrentes, accounts, categories, movements] = await Promise.all([
     getRecurrentes(),
     getAccounts(),
     getCategories(),
+    getMovements(1000), // Fetch up to 1000 movements to match past periods
   ]);
 
   return (
@@ -20,6 +21,7 @@ export default async function RecurrentesPage() {
         initialRecurrentes={recurrentes}
         accounts={accounts}
         categories={categories}
+        movements={movements}
       />
     </div>
   );

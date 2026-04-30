@@ -459,6 +459,21 @@ export async function updateRecurrente(id: string, updates: Partial<Omit<Tables[
   return data;
 }
 
+export async function deleteRecurrente(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const { error } = await supabase
+    .from("recurrentes")
+    .delete()
+    .eq("id", id)
+    .eq("usuario_id", user.id);
+  if (error) throw error;
+  revalidatePath("/app/recurrentes");
+  revalidatePath("/app/dashboard");
+}
+
 /**
  * DASHBOARD STATS
  */
@@ -1022,6 +1037,7 @@ export async function registrarPagoPasivo(
   descripcion: string,
   categoriaId: string | null,
   uvaValor?: number | null,
+  cuotaNumOverride?: number,
 ) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -1036,12 +1052,14 @@ export async function registrarPagoPasivo(
   const isUva = pasivo.sistema_amortizacion === "uva"
     && pasivo.capital_uva && pasivo.cuota_uva && uvaValor && uvaValor > 0;
 
-  const { count: cuotasYaPagadas } = await supabase
-    .from("pagos_pasivos")
-    .select("id", { count: "exact", head: true })
-    .eq("pasivo_id", pasivoId);
-
-  const cuotaNum = (cuotasYaPagadas ?? 0) + 1;
+  let cuotaNum = cuotaNumOverride;
+  if (!cuotaNum) {
+    const { count: cuotasYaPagadas } = await supabase
+      .from("pagos_pasivos")
+      .select("id", { count: "exact", head: true })
+      .eq("pasivo_id", pasivoId);
+    cuotaNum = (cuotasYaPagadas ?? 0) + 1;
+  }
   let capitalUvaPagado: number | null = null;
   let interesUvaPagado: number | null = null;
   let uvaEquivalente: number | null = null;
@@ -1103,6 +1121,18 @@ export async function deletePagoPasivo(pagoId: string, pasivoId: string, uvaValo
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
+
+  const { data: pagoData } = await supabase.from("pagos_pasivos")
+    .select("*").eq("id", pagoId).eq("usuario_id", user.id).single();
+
+  if (pagoData) {
+    // Attempt to delete the associated movimiento using matching data
+    await supabase.from("movimientos").delete()
+      .eq("usuario_id", user.id)
+      .eq("fecha", pagoData.fecha)
+      .eq("monto", pagoData.monto_ars)
+      .eq("descripcion", pagoData.descripcion || "");
+  }
 
   const { error } = await supabase.from("pagos_pasivos").delete()
     .eq("id", pagoId).eq("usuario_id", user.id);
@@ -1174,5 +1204,68 @@ export async function deletePlazoFijo(id: string) {
     .eq("id", id).eq("usuario_id", user.id);
   if (error) throw error;
   revalidatePath("/app/cartera");
+}
+
+// ─── Importación CSV/Excel ───────────────────────────────────────────────────
+
+export async function getMovementsForDeduplication(cuentaId: string, startDate: string, endDate: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase.from("movimientos")
+    .select("fecha, monto, descripcion")
+    .eq("usuario_id", user.id)
+    .eq("cuenta_origen_id", cuentaId)
+    .gte("fecha", startDate)
+    .lte("fecha", endDate);
+
+  return data || [];
+}
+
+export async function createMovementsBulk(movements: any[]) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const rowsToInsert = movements.map(m => ({
+    ...m,
+    usuario_id: user.id,
+    metodo_carga: 'importado'
+  }));
+
+  const { data, error } = await supabase.from("movimientos")
+    .insert(rowsToInsert)
+    .select();
+
+  if (error) throw error;
+  revalidatePath("/app/movimientos");
+  revalidatePath("/app/dashboard");
+  return data;
+}
+
+export async function uploadImportFile(formData: FormData) {
+  const file = formData.get("file") as File;
+  if (!file) throw new Error("No file provided");
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+  const filePath = `${user.id}/${fileName}`;
+
+  const { error } = await supabase.storage
+    .from('importaciones')
+    .upload(filePath, file);
+
+  if (error) {
+    console.error("Error uploading file:", error);
+    throw new Error("Error al subir el archivo a Supabase Storage. Verificá que el bucket 'importaciones' esté creado.");
+  }
+
+  const { data } = supabase.storage.from('importaciones').getPublicUrl(filePath);
+  return data.publicUrl;
 }
 

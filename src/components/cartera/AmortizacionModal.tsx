@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { registrarPagoPasivo, getPagosPasivo } from "@/lib/actions";
+import { toast } from "sonner";
+import { registrarPagoPasivo, getPagosPasivo, deletePagoPasivo } from "@/lib/actions";
 
 // ── Pure schedule calculator ────────────────────────────────────────────────
 export interface CuotaRow {
@@ -160,6 +161,7 @@ export default function AmortizacionModal({
         pasivo.id, parseFloat(pagoMonto), pagoFecha,
         pagoCuentaId || null, pagoDesc || "", pagoCatId || null,
         pagoTarget.uvaRef ?? uvaEfectivo ?? undefined,
+        pagoTarget.nCuota
       );
       const fresh = await getPagosPasivo(pasivo.id);
       setPagos(fresh);
@@ -170,6 +172,27 @@ export default function AmortizacionModal({
     } finally {
       setPagoLoading(false);
     }
+  }
+
+  function handleDeletePago(pagoId: string) {
+    toast("¿Eliminar este pago?", {
+      description: "Se restaurará la deuda y el dinero en la cuenta.",
+      action: {
+        label: "Eliminar",
+        onClick: async () => {
+          try {
+            await deletePagoPasivo(pagoId, pasivo.id, uvaEfectivo ?? undefined);
+            const fresh = await getPagosPasivo(pasivo.id);
+            setPagos(fresh);
+            onSaldoUpdated(pasivo.id);
+            toast.success("Pago eliminado");
+          } catch (err: any) {
+            toast.error("Error al eliminar: " + err.message);
+          }
+        }
+      },
+      cancel: { label: "Cancelar", onClick: () => {} }
+    });
   }
 
   return (
@@ -297,7 +320,19 @@ export default function AmortizacionModal({
                           </button>
                         )}
                         {isPagada && row.pagado?.fecha && (
-                          <span className="text-[10px]" style={{ color: "var(--fg-7)" }}>{row.pagado.fecha}</span>
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="text-[10px]" style={{ color: "var(--fg-7)" }}>{row.pagado.fecha}</span>
+                            <button
+                              onClick={() => handleDeletePago(row.pagado.id)}
+                              className="w-5 h-5 flex items-center justify-center rounded hover:bg-red-500/10 transition-colors"
+                              style={{ color: "rgba(239,68,68,0.7)" }}
+                              title="Eliminar pago"
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                              </svg>
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>

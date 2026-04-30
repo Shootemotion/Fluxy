@@ -7,10 +7,10 @@ export function formatCurrency(
   compact: boolean = false
 ): string {
   if (compact && Math.abs(amount) >= 1000000) {
-    return `${currency === "ARS" ? "$" : "U$S"}${(amount / 1000000).toFixed(1)}M`;
+    return `${currency === "ARS" ? "$" : "U$S"}${(amount / 1000000).toFixed(2)}M`;
   }
   if (compact && Math.abs(amount) >= 1000) {
-    return `${currency === "ARS" ? "$" : "U$S"}${(amount / 1000).toFixed(1)}K`;
+    return `${currency === "ARS" ? "$" : "U$S"}${(amount / 1000).toFixed(2)}K`;
   }
 
   try {
@@ -47,6 +47,17 @@ export function formatMonthYear(date: string | Date): string {
 
 export function cn(...classes: (string | undefined | null | false)[]): string {
   return classes.filter(Boolean).join(" ");
+}
+
+/**
+ * Returns a YYYY-MM-DD string in local time, avoiding the UTC shift bug
+ * of toISOString() for positive/negative timezone offsets.
+ */
+export function formatDateToLocalISO(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function getVariationClass(value: number): string {

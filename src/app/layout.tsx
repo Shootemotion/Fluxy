@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -35,7 +36,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {children}
+        <Toaster position="bottom-right" theme="dark" toastOptions={{ style: { background: 'var(--bg-card)', border: '1px solid var(--bd)', color: 'var(--fg-1)' } }} />
+      </body>
     </html>
   );
 }

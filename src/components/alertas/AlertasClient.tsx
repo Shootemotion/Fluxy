@@ -6,6 +6,7 @@ import {
   createAlertRule, updateAlertRule, deleteAlertRule,
   evaluateAlertRules,
 } from "@/lib/actions";
+import { toast } from "sonner";
 
 const TIPO_ICON: Record<string, string> = {
   warning: "⚠️", danger: "🔴", success: "✅", info: "💡",
@@ -83,9 +84,9 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
   async function handleCreateRule(e: React.FormEvent) {
     e.preventDefault();
     if (!formNombre.trim() || !formValor) return;
-    if (selectedType?.needsCuenta && !formCuenta) { setFormError("Seleccioná una cuenta"); return; }
-    if (selectedType?.needsCat    && !formCat)    { setFormError("Seleccioná una categoría"); return; }
-    if (selectedType?.needsGoal   && !formGoal)   { setFormError("Seleccioná un objetivo"); return; }
+    if (selectedType?.needsCuenta && !formCuenta) { toast.error("Seleccioná una cuenta"); return; }
+    if (selectedType?.needsCat    && !formCat)    { toast.error("Seleccioná una categoría"); return; }
+    if (selectedType?.needsGoal   && !formGoal)   { toast.error("Seleccioná un objetivo"); return; }
 
     setFormLoading(true); setFormError("");
     try {
@@ -101,8 +102,9 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
       setRules(prev => [...prev, newRule]);
       setShowForm(false);
       resetForm();
+      toast.success("Regla creada correctamente");
     } catch (err: any) {
-      setFormError(err.message);
+      toast.error(err.message || "Error al crear la regla");
     } finally {
       setFormLoading(false);
     }
@@ -110,13 +112,28 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
 
   async function handleToggleRule(id: string, activa: boolean) {
     setRules(prev => prev.map(r => r.id === id ? { ...r, activa } : r));
-    startTransition(() => updateAlertRule(id, { activa }));
+    try {
+      await updateAlertRule(id, { activa });
+    } catch (err: any) {
+      toast.error("Error al actualizar la regla");
+    }
   }
 
   async function handleDeleteRule(id: string) {
-    if (!confirm("¿Eliminar esta regla?")) return;
-    setRules(prev => prev.filter(r => r.id !== id));
-    startTransition(() => deleteAlertRule(id));
+    toast("¿Estás seguro de que deseas eliminar esta regla?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () => {
+          try {
+            setRules(prev => prev.filter(r => r.id !== id));
+            await deleteAlertRule(id);
+            toast.success("Regla eliminada");
+          } catch (err: any) {
+            toast.error("Error al eliminar la regla");
+          }
+        },
+      },
+    });
   }
 
   return (

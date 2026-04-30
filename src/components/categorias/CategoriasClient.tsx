@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createCategory, updateCategory } from "@/lib/actions";
+import { toast } from "sonner";
 
 const TIPO_LABELS: Record<string, string> = {
   gasto:         "Gastos",
@@ -68,8 +69,9 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
         setCategories(cats => [...cats, newCat]);
       }
       setShowModal(false); resetForm();
+      toast.success("Categoría guardada");
     } catch (err: any) {
-      setFormError(err?.message ?? String(err));
+      toast.error(err?.message ?? String(err));
     } finally {
       setLoading(false);
     }
@@ -79,8 +81,9 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
     try {
       const updated = await updateCategory(cat.id, { activa: !cat.activa });
       setCategories(cats => cats.map(c => c.id === cat.id ? { ...c, ...updated } : c));
+      toast.success(updated.activa ? "Categoría activada" : "Categoría desactivada");
     } catch (err: any) {
-      alert("Error: " + (err?.message ?? err));
+      toast.error("Error: " + (err?.message ?? err));
     }
   }
 
