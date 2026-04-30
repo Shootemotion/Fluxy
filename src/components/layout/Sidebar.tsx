@@ -62,6 +62,7 @@ const extraItems = [
   { href: "/app/categorias",   label: "Categorías",     icon: "🏷️" },
   { href: "/app/ia",           label: "Asistente IA",   icon: "🤖" },
   { href: "/app/importar",     label: "Importar",       icon: "📥" },
+  { href: "/app/pulir",        label: "Pulir",           icon: "✨" },
   { href: "/app/alertas",      label: "Alertas",        icon: "🔔" },
   { href: "/app/configuracion", label: "Configuración", icon: "⚙️" },
 ];

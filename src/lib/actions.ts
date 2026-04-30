@@ -1273,6 +1273,40 @@ export async function createMovementsBulk(movements: any[]) {
   return data;
 }
 
+export async function getUncategorizedMovements() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const { data } = await supabase
+    .from("movimientos")
+    .select("*, cuentas:cuenta_origen_id(nombre)")
+    .eq("usuario_id", user.id)
+    .is("categoria_id", null)
+    .not("tipo", "in", "(transferencia,aporte_objetivo,retiro_objetivo,compra_activo,venta_activo,ajuste_valuacion)")
+    .order("fecha", { ascending: false })
+    .limit(500);
+
+  return data || [];
+}
+
+export async function updateMovementsCategoryBulk(ids: string[], categoriaId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const { error } = await supabase
+    .from("movimientos")
+    .update({ categoria_id: categoriaId })
+    .in("id", ids)
+    .eq("usuario_id", user.id);
+
+  if (error) throw error;
+  revalidatePath("/app/movimientos");
+  revalidatePath("/app/pulir");
+  revalidatePath("/app/dashboard");
+}
+
 export async function uploadImportFile(formData: FormData) {
   const file = formData.get("file") as File;
   if (!file) throw new Error("No file provided");
