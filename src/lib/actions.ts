@@ -475,6 +475,25 @@ export async function deleteRecurrente(id: string) {
 }
 
 /**
+ * EXCHANGE RATE
+ */
+export async function getLatestTCUSD(): Promise<number> {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("tipos_cambio")
+      .select("valor")
+      .eq("moneda_origen", "USD")
+      .eq("moneda_destino", "ARS")
+      .order("fecha", { ascending: false })
+      .limit(1)
+      .single();
+    if (data?.valor && Number(data.valor) > 100) return Number(data.valor);
+  } catch {}
+  return 1300; // fallback
+}
+
+/**
  * DASHBOARD STATS
  */
 export async function getDashboardStats() {
@@ -482,7 +501,7 @@ export async function getDashboardStats() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const TC_REF = 1250; // Reference dollar rate
+  const TC_REF = await getLatestTCUSD();
 
   const now = new Date();
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -546,7 +565,8 @@ export async function getDashboardStats() {
     gastos,
     ahorro,
     tasaAhorro: ingresos > 0 ? (ahorro / ingresos) * 100 : 0,
-    totalBalance: netWorth, // Primary dashboard figure is now Net Worth
+    totalBalance: netWorth,
+    tcUsd: TC_REF,
     assets: {
       accounts: accountsArs,
       investments: posArs,

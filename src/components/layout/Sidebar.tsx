@@ -73,12 +73,12 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Check admin
+  // Check admin via env var so no email is hardcoded in source
   useEffect(() => {
+    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+    if (!adminEmail) return;
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user?.email === "bmclerif@gmail.com") {
-        setIsAdmin(true);
-      }
+      if (data.user?.email === adminEmail) setIsAdmin(true);
     });
   }, [supabase.auth]);
 

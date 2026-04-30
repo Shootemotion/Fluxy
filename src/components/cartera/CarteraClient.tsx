@@ -22,10 +22,10 @@ interface CarteraClientProps {
   accounts: any[];
   categories: any[];
   initialPlazos: any[];
+  tcUsd: number;
 }
 
 const COLORES = ["#6C63FF","#22D3EE","#10B981","#F59E0B","#EF4444","#7C3AED","#EC4899","#14B8A6","#F97316","#84CC16","#6B7280"];
-const TC_REF = 1295;
 
 interface Quote { ticker: string; shortName: string; price: number|null; change: number|null; changePercent: number|null; currency: string; marketState: string; dayHigh: number|null; dayLow: number|null; }
 interface TickerSuggestion { ticker: string; shortName: string; exchange: string; type: string; }
@@ -100,7 +100,8 @@ function TickerSearchInput({ value, onChange, onSelect }: {
 /* ── Main component ─────────────────────────────────────────────────────────── */
 type Tab = "resumen" | "inversiones" | "activos" | "pasivos" | "plazos";
 
-export default function CarteraClient({ initialValuations, initialPosiciones, initialPasivos, accounts, categories, initialPlazos }: CarteraClientProps) {
+export default function CarteraClient({ initialValuations, initialPosiciones, initialPasivos, accounts, categories, initialPlazos, tcUsd }: CarteraClientProps) {
+  const TC_REF = tcUsd;
   const [tab, setTab] = useState<Tab>("resumen");
 
   /* ── Valuaciones ── */

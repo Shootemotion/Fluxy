@@ -1,4 +1,4 @@
-import { getPosiciones, getPasivos, getAccounts, getCategories, getPlazos } from "@/lib/actions";
+import { getPosiciones, getPasivos, getAccounts, getCategories, getPlazos, getLatestTCUSD } from "@/lib/actions";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import CarteraClient from "@/components/cartera/CarteraClient";
@@ -8,7 +8,7 @@ export default async function CarteraPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  const [valuationsResult, posiciones, pasivos, accounts, categories, plazos] = await Promise.all([
+  const [valuationsResult, posiciones, pasivos, accounts, categories, plazos, tcUsd] = await Promise.all([
     supabase
       .from("valuaciones")
       .select("*")
@@ -19,6 +19,7 @@ export default async function CarteraPage() {
     getAccounts(),
     getCategories("gasto"),
     getPlazos(),
+    getLatestTCUSD(),
   ]);
 
   return (
@@ -30,6 +31,7 @@ export default async function CarteraPage() {
         accounts={accounts}
         categories={categories}
         initialPlazos={plazos}
+        tcUsd={tcUsd}
       />
     </div>
   );

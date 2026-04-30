@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatCurrency, getProgressColor, getProgressStatus } from "@/lib/utils";
+import { formatCurrency, getProgressColor, getProgressStatus, calculateMonthsToGoal } from "@/lib/utils";
 import { createGoal, updateGoal, createMovement } from "@/lib/actions";
 
 interface ObjetivosClientProps {
@@ -186,6 +186,27 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
             const cfg    = STATUS_CONFIG[status];
             const faltan = Math.max(0, obj.monto_objetivo - obj.saldo_actual);
 
+            // Projected completion date
+            const monthlyContrib = obj.aporte_mensual_sugerido
+              ? Number(obj.aporte_mensual_sugerido)
+              : (() => {
+                  const createdAt = new Date(obj.created_at);
+                  const now = new Date();
+                  const months = Math.max(1,
+                    (now.getFullYear() - createdAt.getFullYear()) * 12 +
+                    (now.getMonth() - createdAt.getMonth())
+                  );
+                  return Number(obj.saldo_actual) / months;
+                })();
+            const mesesRestantes = calculateMonthsToGoal(Number(obj.saldo_actual), Number(obj.monto_objetivo), monthlyContrib);
+            const fechaProyectada = mesesRestantes !== null && mesesRestantes > 0
+              ? (() => {
+                  const d = new Date();
+                  d.setMonth(d.getMonth() + mesesRestantes);
+                  return d.toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+                })()
+              : null;
+
             return (
               <div key={obj.id} className="glass-card p-6 space-y-4" style={{ borderTop: `3px solid ${color}` }}>
                 {/* Top row */}
@@ -253,11 +274,19 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
                   </div>
                 </div>
 
-                {obj.fecha_meta && (
-                  <p className="text-xs" style={{ color: "var(--fg-7)" }}>
-                    📅 Meta: {new Date(obj.fecha_meta).toLocaleDateString("es-AR", { month: "long", year: "numeric" })}
-                  </p>
-                )}
+                <div className="flex flex-wrap gap-3 text-xs" style={{ color: "var(--fg-7)" }}>
+                  {obj.fecha_meta && (
+                    <span>📅 Meta: {new Date(obj.fecha_meta + "T12:00:00").toLocaleDateString("es-AR", { month: "long", year: "numeric" })}</span>
+                  )}
+                  {pct < 100 && fechaProyectada && (
+                    <span style={{ color: monthlyContrib > 0 ? "#A5A0FF" : "var(--fg-7)" }}>
+                      🔮 Proyectado: {fechaProyectada}
+                    </span>
+                  )}
+                  {pct >= 100 && (
+                    <span style={{ color: "#10B981" }}>✅ ¡Meta alcanzada!</span>
+                  )}
+                </div>
               </div>
             );
           })}

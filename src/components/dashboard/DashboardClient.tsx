@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { formatCurrency, getProgressColor } from "@/lib/utils";
 import Link from "next/link";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
+  ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts";
 
 interface MonthStat {
@@ -245,7 +245,7 @@ export default function DashboardClient({
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartData} barCategoryGap="30%" barGap={4}>
+                <ComposedChart data={chartData} barCategoryGap="30%" barGap={4}>
                   <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
                   <XAxis
                     dataKey="mes"
@@ -278,7 +278,15 @@ export default function DashboardClient({
                       <Cell key={i} fill={entry.proyectado ? "rgba(239,68,68,0.32)" : "#EF4444"} />
                     ))}
                   </Bar>
-                </BarChart>
+                  <Line
+                    type="monotone"
+                    dataKey="ahorro"
+                    stroke="#6C63FF"
+                    strokeWidth={2}
+                    dot={false}
+                    strokeDasharray={(chartData.some(d => d.proyectado) ? "4 3" : undefined) as any}
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
               <div className="flex items-center gap-5 mt-3 justify-center flex-wrap">
                 <span className="flex items-center gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
@@ -287,8 +295,11 @@ export default function DashboardClient({
                 <span className="flex items-center gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
                   <span className="w-3 h-3 rounded-sm" style={{ background: "#EF4444" }} /> Gastos
                 </span>
+                <span className="flex items-center gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
+                  <span className="w-3 h-1 rounded-sm inline-block" style={{ background: "#6C63FF" }} /> Ahorro
+                </span>
                 <span className="flex items-center gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
-                  <span className="w-3 h-3 rounded-sm" style={{ background: "rgba(255,255,255,0.15)" }} /> Proyectado (fijo)
+                  <span className="w-3 h-3 rounded-sm" style={{ background: "rgba(255,255,255,0.15)" }} /> Proyectado
                 </span>
               </div>
             </div>
