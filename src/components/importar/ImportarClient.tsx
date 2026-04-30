@@ -597,7 +597,7 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
             fecha_inicio: c1Date.toISOString().split("T")[0],
             fecha_fin: cnDate.toISOString().split("T")[0],
             es_cuotas: true,
-            cuotas_totales: r.cuotasTotales,
+            cuotas_totales: r.cuotasTotales ?? null,
             tasa_interes: null,
             activo: true,
           });
