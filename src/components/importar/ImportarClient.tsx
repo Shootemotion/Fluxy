@@ -50,6 +50,8 @@ interface ProcessedRow {
   cuotasTotales?: number;
   montoTotal?: number;
   crearRecurrente?: boolean;
+  isPastInstallment?: boolean;
+  comentario?: string;
   originalData?: any;
 }
 
@@ -451,6 +453,32 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
       const cuotasFuturas = cPendientes != null ? cPendientes - 1 : cTotales - cActual;
       const debeCrearRecurrente = isCuota && cuotasFuturas > 0;
 
+      // Generate past installments (C1 to C_current-1) in chronological order
+      if (isCuota && cActual > 1) {
+        for (let pastN = 1; pastN < cActual; pastN++) {
+          const pastDate = new Date(fechaMovimiento + "T12:00:00");
+          pastDate.setMonth(pastDate.getMonth() - (cActual - pastN));
+          rows.push({
+            fecha: pastDate.toISOString().split("T")[0],
+            descripcion: `💳 ${desc} (${pastN}/${cTotales})`,
+            monto: finalMontoNum,
+            tipo,
+            moneda,
+            categoria_id: cat.id,
+            categoria_nombre: cat.nombre,
+            cuenta_origen_id: cuentaId,
+            selected: true,
+            isCuota: true,
+            cuotaActual: pastN,
+            cuotasTotales: cTotales,
+            montoTotal: finalMontoTotal,
+            crearRecurrente: false,
+            isPastInstallment: true,
+            originalData: { ...r, _fechaCompra: parsedDate, _cuotasFuturas: 0 },
+          });
+        }
+      }
+
       rows.push({
         fecha: fechaMovimiento,
         descripcion: finalDesc,
@@ -517,7 +545,10 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
   };
 
   const handleImport = async () => {
-    const toImport = processedRows.filter(r => r.selected);
+    const toImport = processedRows.filter(r => r.selected).map(r => ({
+      ...r,
+      descripcion: r.comentario?.trim() ? `${r.descripcion} · ${r.comentario.trim()}` : r.descripcion,
+    }));
     if (toImport.length === 0) {
       toast.error("No hay filas seleccionadas para importar.");
       return;
@@ -542,18 +573,18 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
           const cuotasFuturas: number = r.originalData?._cuotasFuturas ?? (r.cuotasTotales! - r.cuotaActual!);
           if (cuotasFuturas <= 0) continue;
 
-          // El recurrente empieza el mes siguiente a la fecha del movimiento (cierre o compra)
-          const start = new Date(r.fecha + "T12:00:00");
-          start.setMonth(start.getMonth() + 1);
-          start.setDate(Math.min(start.getDate(), 28));
-
-          const end = new Date(start.getTime());
-          end.setMonth(end.getMonth() + cuotasFuturas);
-
           const nombreLimpio = r.descripcion
             .replace(/💳\s*/g, "")
             .replace(/\(\d{1,3}\/\d{1,3}[^)]*\)/g, "")
             .trim();
+
+          // Recurrente covers the FULL plan: starts at C1, ends at C_total
+          const cActualNum = r.cuotaActual || 1;
+          const c1Date = new Date(r.fecha + "T12:00:00");
+          c1Date.setMonth(c1Date.getMonth() - (cActualNum - 1));
+          c1Date.setDate(Math.min(c1Date.getDate(), 28));
+          const cnDate = new Date(c1Date.getTime());
+          cnDate.setMonth(cnDate.getMonth() + (r.cuotasTotales! - 1));
 
           await createRecurrente({
             nombre: `💳 ${nombreLimpio}`,
@@ -562,11 +593,11 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
             moneda: r.moneda || "ARS",
             categoria_id: r.categoria_id || null,
             cuenta_id: r.cuenta_origen_id,
-            dia_del_mes: start.getDate(),
-            fecha_inicio: start.toISOString().split("T")[0],
-            fecha_fin: end.toISOString().split("T")[0],
+            dia_del_mes: c1Date.getDate(),
+            fecha_inicio: c1Date.toISOString().split("T")[0],
+            fecha_fin: cnDate.toISOString().split("T")[0],
             es_cuotas: true,
-            cuotas_totales: cuotasFuturas,
+            cuotas_totales: r.cuotasTotales,
             tasa_interes: null,
             activo: true,
           });
@@ -892,7 +923,9 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                         />
                       </td>
                       <td className="align-top pt-3">
-                        {r.isDuplicate ? (
+                        {r.isPastInstallment ? (
+                          <span className="badge badge-muted text-[10px] text-violet-400 bg-violet-400/10 border border-violet-400/20">Cuota pasada</span>
+                        ) : r.isDuplicate ? (
                           <span className="badge badge-muted text-[10px] text-amber-400 bg-amber-400/10 border border-amber-400/20">Duplicado</span>
                         ) : (
                           <span className="badge badge-muted text-[10px] text-emerald-400 bg-emerald-400/10 border border-emerald-400/20">Nuevo</span>
@@ -901,7 +934,20 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                       <td className="text-xs font-mono align-top pt-3">{r.fecha}</td>
                       <td className="align-top pt-3">
                         <div className="text-sm break-words max-w-[340px]" title={r.descripcion}>{r.descripcion}</div>
-                        
+                        {r.selected && (
+                          <input
+                            type="text"
+                            placeholder="Agregar nota..."
+                            value={r.comentario || ""}
+                            onChange={e => {
+                              const newRows = [...processedRows];
+                              newRows[actualIndex].comentario = e.target.value;
+                              setProcessedRows(newRows);
+                            }}
+                            className="mt-1 text-[10px] bg-transparent border-b border-white/10 focus:border-white/30 outline-none text-white/60 focus:text-white/90 w-full placeholder:italic placeholder:text-white/20 transition-colors"
+                          />
+                        )}
+
                         {!r.isCuota && r.selected && (
                           <button 
                             onClick={() => {
