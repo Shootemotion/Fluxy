@@ -4,13 +4,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import {
-  createAccount, updateAccount, deleteAccount,
   createInvestment, updateInvestment, deleteInvestment,
-  createPhysicalAsset, updatePhysicalAsset, deletePhysicalAsset,
+  createPhysicalAsset,
   createFixedDeposit, updateFixedDeposit, deleteFixedDeposit,
   createPasivo, updatePasivo, deletePasivo, registrarPagoPasivo,
   getPagosPasivo, deletePagoPasivo,
-  createRecurrente,
 } from "@/lib/actions";
 import AmortizacionModal from "./AmortizacionModal";
 import { toast } from "sonner";
@@ -80,12 +78,12 @@ function TickerSearchInput({ value, onChange, onSelect }: {
       </div>
       {open && (
         <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl overflow-hidden shadow-xl"
-          style={{ background: "#1E1E2E", border: "1px solid rgba(255,255,255,0.10)" }}>
+          style={{ background: "#1E1E2E", border: "1px solid var(--bd)" }}>
           {suggestions.map(s => (
             <button key={s.ticker} type="button" onMouseDown={() => { onSelect(s.ticker, s.shortName); setOpen(false); setSuggestions([]); }}
               className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/5 transition-colors">
               <span className="w-14 text-xs font-mono font-bold flex-shrink-0" style={{ color: "#A5A0FF" }}>{s.ticker}</span>
-              <span className="flex-1 text-sm truncate" style={{ color: "rgba(255,255,255,0.80)" }}>{s.shortName}</span>
+              <span className="flex-1 text-sm truncate" style={{ color: "var(--fg-2)" }}>{s.shortName}</span>
               <span className="text-[10px] flex-shrink-0" style={{ color: "var(--fg-6)" }}>
                 {TYPE[s.type] ?? s.type}{s.exchange ? ` · ${s.exchange}` : ""}
               </span>
@@ -162,7 +160,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
     finally { setQuotesLoading(false); }
   }, [posiciones]);
 
-  useEffect(() => { if (posiciones.length > 0) fetchQuotes(); }, [fetchQuotes]);
+  useEffect(() => { fetchQuotes(); }, [fetchQuotes]);
 
   async function handleSavePos(e: React.FormEvent) {
     e.preventDefault();
@@ -624,7 +622,6 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
   const patrimonioNeto  = totalActivosARS + totalPlazosARS - totalPasivosARS;
 
   const TIPO_PASIVO_LABELS: Record<string, string> = { prestamo: "Préstamo", hipoteca: "Hipoteca", tarjeta: "Tarjeta", leasing: "Leasing", otro: "Otro" };
-  const CER_MENSUAL_DEFAULT = 0.03; // fallback if no API CER
 
   /* ── Render ── */
   return (
@@ -642,7 +639,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl overflow-x-auto" style={{ background: "rgba(255,255,255,0.04)" }}>
+      <div className="flex gap-1 p-1 rounded-xl overflow-x-auto" style={{ background: "var(--bg-faint)" }}>
         {(["resumen","inversiones","activos","pasivos","plazos"] as Tab[]).map(t => {
           const labels: Record<Tab, string> = { resumen: "📊 Resumen", inversiones: "📈 Inversiones", activos: "🏠 Activos", pasivos: "📉 Pasivos", plazos: "🏦 Plazos Fijos" };
           return (
@@ -693,7 +690,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                         <Cell key={i} fill={["#10B981","#6C63FF","#EF4444"][i]} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ background: "rgba(20,20,38,0.95)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, fontSize: 12 }}
+                    <Tooltip contentStyle={{ background: "rgba(20,20,38,0.95)", border: "1px solid var(--bd)", borderRadius: 10, fontSize: 12 }}
                       formatter={(v: any) => [`$ ${Number(v).toLocaleString("es-AR", { maximumFractionDigits: 0 })}`, ""]} />
                     <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
                   </PieChart>
@@ -712,7 +709,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                   { label: "Total pasivos", sublabel: `${pasivos.length} deuda${pasivos.length !== 1 ? "s" : ""}`, value: -totalPasivosARS, color: "#EF4444" },
                   { label: "Patrimonio neto", sublabel: "", value: patrimonioNeto, color: patrimonioNeto >= 0 ? "#10B981" : "#EF4444", bold: true },
                 ].map((row, i) => (
-                  <div key={i} className="flex items-center justify-between px-5 py-3" style={{ borderTop: i > 0 ? "1px solid rgba(255,255,255,0.04)" : undefined }}>
+                  <div key={i} className="flex items-center justify-between px-5 py-3" style={{ borderTop: i > 0 ? "1px solid var(--bd-faint)" : undefined }}>
                     <div>
                       <p className={`text-sm ${row.bold ? "font-bold" : "font-medium"}`} style={{ color: row.bold ? "var(--fg-hi)" : "var(--fg-5)" }}>{row.label}</p>
                       {row.sublabel && <p className="text-xs" style={{ color: "var(--fg-6)" }}>{row.sublabel}</p>}
@@ -751,7 +748,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
             {posiciones.length > 0 && (
               <button onClick={fetchQuotes} disabled={quotesLoading}
                 className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
-                style={{ background: "rgba(255,255,255,0.06)", color: "var(--fg-5)" }}>
+                style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={quotesLoading ? "animate-spin" : ""}>
                   <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
                   <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -868,7 +865,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                   <Pie data={dataSeries} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3}>
                     {dataSeries.map((_, i) => <Cell key={i} fill={COLORES[i % COLORES.length]} />)}
                   </Pie>
-                  <Tooltip contentStyle={{ background: "rgba(20,20,38,0.95)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, fontSize: 12 }}
+                  <Tooltip contentStyle={{ background: "rgba(20,20,38,0.95)", border: "1px solid var(--bd)", borderRadius: 10, fontSize: 12 }}
                     formatter={(v: any, name: any, props: any) => [props.payload.moneda === "USD" ? `U$S ${Number(v).toLocaleString()}` : formatCurrency(v, "ARS", true), name]} />
                   <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
                 </PieChart>
@@ -925,13 +922,13 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
               const saldoUdas = Math.max(0, Number(totalUdas) - udasPagadas);
 
               return (
-                <div key={p.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                <div key={p.id} style={{ borderBottom: "1px solid var(--bd-faint)" }}>
                   {/* Main row */}
                   <div className="flex items-center gap-3 px-4 py-3">
                     {/* Expand button */}
                     <button onClick={() => togglePasivoHistory(p.id)}
                       className="w-6 h-6 flex items-center justify-center rounded-lg flex-shrink-0 transition-all"
-                      style={{ background: isExpanded ? "rgba(108,99,255,0.20)" : "rgba(255,255,255,0.05)", color: isExpanded ? "#A5A0FF" : "var(--fg-7)" }}>
+                      style={{ background: isExpanded ? "rgba(108,99,255,0.20)" : "var(--bg-input)", color: isExpanded ? "#A5A0FF" : "var(--fg-7)" }}>
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         {isExpanded ? <polyline points="18 15 12 9 6 15"/> : <polyline points="6 9 12 15 18 9"/>}
                       </svg>
@@ -968,7 +965,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                       )}
                       {/* Progress */}
                       <div className="flex items-center gap-1.5 mt-1 justify-end">
-                        <div className="w-16 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+                        <div className="w-16 h-1 rounded-full overflow-hidden" style={{ background: "var(--bg-hover)" }}>
                           <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: "#10B981" }} />
                         </div>
                         <span className="text-[10px] font-bold" style={{ color: "#10B981" }}>{pct.toFixed(0)}%</span>
@@ -1017,7 +1014,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                           <div className="space-y-1">
                             {history.map((pg: any) => (
                               <div key={pg.id} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2"
-                                style={{ background: "rgba(255,255,255,0.04)" }}>
+                                style={{ background: "var(--bg-faint)" }}>
                                 <div className="min-w-0">
                                   <p className="text-xs font-medium" style={{ color: "var(--fg-5)" }}>
                                     {pg.fecha} · $ {Number(pg.monto_ars).toLocaleString("es-AR")}
@@ -1059,10 +1056,10 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                           </div>
                           {uvaEfectivo ? (
                             <>
-                              <div className="rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
+                              <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--bd)" }}>
                                 <table className="w-full text-xs">
                                   <thead>
-                                    <tr style={{ background: "rgba(255,255,255,0.04)" }}>
+                                    <tr style={{ background: "var(--bg-faint)" }}>
                                       <th className="px-2 py-1.5 text-left" style={{ color: "var(--fg-6)" }}>N°</th>
                                       <th className="px-2 py-1.5 text-left" style={{ color: "var(--fg-6)" }}>Mes</th>
                                       <th className="px-2 py-1.5 text-right" style={{ color: "#10B981" }}>Cap.UVA</th>
@@ -1073,7 +1070,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                                   </thead>
                                   <tbody>
                                     {proyeccion.map((c) => (
-                                      <tr key={c.nCuota} style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+                                      <tr key={c.nCuota} style={{ borderTop: "1px solid var(--bd-faint)" }}>
                                         <td className="px-2 py-1.5 font-mono" style={{ color: "var(--fg-5)" }}>{c.nCuota}</td>
                                         <td className="px-2 py-1.5" style={{ color: "var(--fg-4)" }}>{c.mes}</td>
                                         <td className="px-2 py-1.5 text-right font-mono" style={{ color: "#10B981" }}>{c.capitalUva.toFixed(1)}</td>
@@ -1090,7 +1087,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                                   onClick={() => setProjPage(prev => ({ ...prev, [p.id]: Math.max(0, (prev[p.id] || 0) - 1) }))}
                                   disabled={(projPage[p.id] || 0) === 0}
                                   className="text-[10px] px-2 py-1 rounded-lg disabled:opacity-30"
-                                  style={{ background: "rgba(255,255,255,0.06)", color: "var(--fg-6)" }}>
+                                  style={{ background: "var(--bg-hover)", color: "var(--fg-6)" }}>
                                   ← Anteriores
                                 </button>
                                 <span className="text-[10px]" style={{ color: "var(--fg-7)" }}>
@@ -1100,7 +1097,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                                   onClick={() => setProjPage(prev => ({ ...prev, [p.id]: (prev[p.id] || 0) + 1 }))}
                                   disabled={((projPage[p.id] || 0) + 1) * 10 >= Number(p.n_cuotas)}
                                   className="text-[10px] px-2 py-1 rounded-lg disabled:opacity-30"
-                                  style={{ background: "rgba(255,255,255,0.06)", color: "var(--fg-6)" }}>
+                                  style={{ background: "var(--bg-hover)", color: "var(--fg-6)" }}>
                                   Ver próximas 10 →
                                 </button>
                               </div>
@@ -1115,7 +1112,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                 </div>
               );
             })}
-            <div className="px-5 py-3 flex items-center justify-between" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+            <div className="px-5 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--bd-faint)" }}>
               <p className="text-sm font-semibold" style={{ color: "var(--fg-5)" }}>Total deuda pendiente</p>
               <p className="font-mono font-bold" style={{ color: "#EF4444" }}>$ {totalPasivosARS.toLocaleString("es-AR", { maximumFractionDigits: 0 })}</p>
             </div>
@@ -1160,7 +1157,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                         {pf.renovacion_automatica && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(108,99,255,0.15)", color: "#A5A0FF" }}>Auto-renueva</span>}
                       </div>
                       {/* Progress bar */}
-                      <div className="w-full h-1 rounded-full mb-2" style={{ background: "rgba(255,255,255,0.08)" }}>
+                      <div className="w-full h-1 rounded-full mb-2" style={{ background: "var(--bg-hover)" }}>
                         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: vencido ? "#F59E0B" : "#10B981" }} />
                       </div>
                       {/* Numbers grid */}
@@ -1213,7 +1210,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
       {/* ══ MODAL: Plazo Fijo ══ */}
       {showPlazoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="glass-card modal-panel w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <h2 className="text-xl font-bold" style={{ color: "var(--fg-hi)" }}>{editingPlazo ? "Editar plazo fijo" : "Nuevo plazo fijo"}</h2>
@@ -1300,7 +1297,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
       {/* ══ MODAL: Activo físico ══ */}
       {showValModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-md">
+          <div className="glass-card modal-panel w-full max-w-md">
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <h2 className="text-xl font-bold" style={{ color: "var(--fg-hi)" }}>Nuevo activo físico</h2>
@@ -1344,7 +1341,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
       {/* ══ MODAL: Posición ══ */}
       {showPosModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-md" style={{ maxHeight: "90vh", overflowY: "auto" }}>
+          <div className="glass-card modal-panel w-full max-w-md">
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <h2 className="text-xl font-bold" style={{ color: "var(--fg-hi)" }}>{editingPos ? "Editar posición" : "Nueva posición"}</h2>
@@ -1397,7 +1394,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
       {/* ══ MODAL: Registrar pago ══ */}
       {showPagoModal && pagoTargetPasivo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-md">
+          <div className="glass-card modal-panel w-full max-w-md">
             <div className="p-6">
               <div className="flex items-start justify-between mb-1">
                 <div>
@@ -1498,7 +1495,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
       {/* ══ MODAL: Pasivo ══ */}
       {showPasivoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-md" style={{ maxHeight: "90vh", overflowY: "auto" }}>
+          <div className="glass-card modal-panel w-full max-w-md">
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <h2 className="text-xl font-bold" style={{ color: "var(--fg-hi)" }}>{editingPasivo ? "Editar deuda" : "Nueva deuda / pasivo"}</h2>
@@ -1568,7 +1565,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                       <div className="space-y-2">
                         <p className="text-xs" style={{ color: "#EF4444" }}>{uvaError}</p>
                         <div>
-                          <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "rgba(255,255,255,0.40)" }}>Ingresar valor UVA manualmente</label>
+                          <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "var(--fg-5)" }}>Ingresar valor UVA manualmente</label>
                           <input type="number" className="input-field font-mono" placeholder="ej: 1650.00" min="100" step="0.01"
                             value={uvaManual} onChange={e => setUvaManual(e.target.value)} onFocus={e => e.target.select()} />
                         </div>
@@ -1578,24 +1575,24 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                     {/* Capital + cuotas + TNA */}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "rgba(255,255,255,0.40)" }}>Capital en UVAs *</label>
+                        <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "var(--fg-5)" }}>Capital en UVAs *</label>
                         <input type="number" className="input-field font-mono" placeholder="ej: 50000" min="0" step="any"
                           value={pCapitalUva} onChange={e => setPCapitalUva(e.target.value)} onFocus={e => e.target.select()} required />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "rgba(255,255,255,0.40)" }}>Cant. cuotas *</label>
+                        <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "var(--fg-5)" }}>Cant. cuotas *</label>
                         <input type="number" className="input-field font-mono" placeholder="ej: 240" min="1" step="1"
                           value={pNCuotas} onChange={e => setPNCuotas(e.target.value)} onFocus={e => e.target.select()} required />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "rgba(255,255,255,0.40)" }}>TNA (%)</label>
+                        <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "var(--fg-5)" }}>TNA (%)</label>
                         <input type="number" className="input-field font-mono" placeholder="0" min="0" step="0.01"
                           value={pTasa} onChange={e => setPTasa(e.target.value)} onFocus={e => e.target.select()} />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "rgba(255,255,255,0.40)" }}>Fecha primer cuota</label>
+                        <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "var(--fg-5)" }}>Fecha primer cuota</label>
                         <input type="date" className="input-field" value={pFechaI} onChange={e => setPFechaI(e.target.value)} />
                       </div>
                     </div>
@@ -1605,25 +1602,25 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                       <div className="rounded-lg p-3 space-y-1.5" style={{ background: "rgba(108,99,255,0.14)" }}>
                         {cuotaUvaCalc && (
                           <div className="flex justify-between text-xs">
-                            <span style={{ color: "rgba(255,255,255,0.45)" }}>Cuota en UVAs</span>
+                            <span style={{ color: "var(--fg-5)" }}>Cuota en UVAs</span>
                             <span className="font-mono font-bold" style={{ color: "#A5A0FF" }}>{cuotaUvaCalc.toLocaleString("es-AR", { maximumFractionDigits: 2 })} UVAs</span>
                           </div>
                         )}
                         {cuotaARSCalc && (
                           <div className="flex justify-between text-xs">
-                            <span style={{ color: "rgba(255,255,255,0.45)" }}>Cuota ARS estimada hoy</span>
+                            <span style={{ color: "var(--fg-5)" }}>Cuota ARS estimada hoy</span>
                             <span className="font-mono font-bold" style={{ color: "#A5A0FF" }}>$ {Math.round(cuotaARSCalc).toLocaleString("es-AR")}</span>
                           </div>
                         )}
                         {montoARSCalc && (
                           <div className="flex justify-between text-xs">
-                            <span style={{ color: "rgba(255,255,255,0.45)" }}>Capital ARS hoy</span>
-                            <span className="font-mono" style={{ color: "rgba(255,255,255,0.65)" }}>$ {Math.round(montoARSCalc).toLocaleString("es-AR")}</span>
+                            <span style={{ color: "var(--fg-5)" }}>Capital ARS hoy</span>
+                            <span className="font-mono" style={{ color: "var(--fg-3)" }}>$ {Math.round(montoARSCalc).toLocaleString("es-AR")}</span>
                           </div>
                         )}
                         {pFechaI && uvaNInt > 0 && (
                           <div className="flex justify-between text-xs">
-                            <span style={{ color: "rgba(255,255,255,0.45)" }}>Vencimiento estimado</span>
+                            <span style={{ color: "var(--fg-5)" }}>Vencimiento estimado</span>
                             <span className="font-mono font-semibold" style={{ color: "#10B981" }}>{calcFechaVenc(pFechaI, uvaNInt)}</span>
                           </div>
                         )}
@@ -1633,7 +1630,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                     {/* Saldo pendiente (edit mode only: how much is still owed) */}
                     {editingPasivo && (
                       <div>
-                        <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "rgba(255,255,255,0.40)" }}>Saldo pendiente actual</label>
+                        <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "var(--fg-5)" }}>Saldo pendiente actual</label>
                         <input type="number" className="input-field font-mono" placeholder="0" min="0" step="any"
                           value={pSaldo} onChange={e => setPSaldo(e.target.value)} onFocus={e => e.target.select()} />
                       </div>
@@ -1644,35 +1641,35 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
                   <>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Monto original *</label>
+                        <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Monto original *</label>
                         <input type="number" className="input-field font-mono" placeholder="0" min="0" step="any"
                           value={pMontoOrig} onChange={e => setPMontoOrig(e.target.value)} onFocus={e => e.target.select()} required />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Saldo pendiente *</label>
+                        <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Saldo pendiente *</label>
                         <input type="number" className="input-field font-mono" placeholder="0" min="0" step="any"
                           value={pSaldo} onChange={e => setPSaldo(e.target.value)} onFocus={e => e.target.select()} required />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Cuota mensual</label>
+                        <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Cuota mensual</label>
                         <input type="number" className="input-field font-mono" placeholder="0" min="0" step="any"
                           value={pCuota} onChange={e => setPCuota(e.target.value)} onFocus={e => e.target.select()} />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Tasa TNA (%)</label>
+                        <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Tasa TNA (%)</label>
                         <input type="number" className="input-field font-mono" placeholder="0" min="0" step="0.01"
                           value={pTasa} onChange={e => setPTasa(e.target.value)} onFocus={e => e.target.select()} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Fecha inicio</label>
+                        <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Fecha inicio</label>
                         <input type="date" className="input-field" value={pFechaI} onChange={e => setPFechaI(e.target.value)} />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Fecha vencimiento</label>
+                        <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Fecha vencimiento</label>
                         <input type="date" className="input-field" value={pFechaV} onChange={e => setPFechaV(e.target.value)} />
                       </div>
                     </div>
@@ -1693,7 +1690,7 @@ export default function CarteraClient({ initialValuations, initialPosiciones, in
       {showAmortModal && amortPasivo && (
         amortLoading ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-            <div className="glass-card p-8 text-center">
+            <div className="glass-card modal-panel p-8 text-center">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#A5A0FF" strokeWidth="2" className="animate-spin mx-auto mb-3">
                 <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/>
               </svg>

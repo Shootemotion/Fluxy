@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/api-auth";
 
 // Cache UVA value for 6 hours (changes once per business day)
 let uvaCache: { valor: number; fecha: string; cerMensual: number | null; expiresAt: number } | null = null;
@@ -9,7 +10,6 @@ function calcCerMensual(data: { fecha: string; valor: number }[]): number | null
   // Find item closest to 12 months ago
   const target = new Date(last.fecha);
   target.setFullYear(target.getFullYear() - 1);
-  const targetStr = target.toISOString().split("T")[0];
   // Find the closest date in the array
   let closest = data[0];
   for (const d of data) {
@@ -25,23 +25,10 @@ function calcCerMensual(data: { fecha: string; valor: number }[]): number | null
   return Math.pow(last.valor / closest.valor, 1 / months) - 1;
 }
 
-async function bcraFetch(url: string) {
-  // BCRA API uses a certificate signed by "Autoridad Certificante Raiz de la
-  // Republica Argentina" which is not in Node.js's default trust store.
-  // We temporarily bypass SSL verification only for these government API calls.
-  const prev = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-  try {
-    return await fetch(url, {
-      headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0" },
-      cache: "no-store",
-    });
-  } finally {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = prev;
-  }
-}
-
 export async function GET() {
+  const unauthorized = await requireUser();
+  if (unauthorized) return unauthorized;
+
   if (uvaCache && uvaCache.expiresAt > Date.now()) {
     return NextResponse.json(uvaCache);
   }
@@ -79,7 +66,7 @@ export async function GET() {
     };
 
     return NextResponse.json(uvaCache);
-  } catch (err: any) {
+  } catch {
     return NextResponse.json(
       { error: "No se pudo obtener el valor del UVA. Podés ingresarlo manualmente." },
       { status: 502 }

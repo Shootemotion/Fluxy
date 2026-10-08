@@ -104,16 +104,21 @@ export default function CuentasClient({ initialAccounts }: CuentasClientProps) {
     }
   }
 
-  const totalARS = accounts.reduce((s, a) => a.moneda === "ARS" ? s + Number(a.saldo_inicial) : s, 0);
-  const totalUSD = accounts.reduce((s, a) => a.moneda === "USD" ? s + Number(a.saldo_inicial) : s, 0);
+  // `saldo` is saldo_inicial adjusted by every movement (see lib/balances.ts).
+  // Newly created accounts come back from the server action without it, so we
+  // fall back to the opening balance until the page revalidates.
+  const saldoDe = (a: any) => Number(a.saldo ?? a.saldo_inicial ?? 0);
+
+  const totalARS = accounts.reduce((s, a) => a.moneda === "ARS" ? s + saldoDe(a) : s, 0);
+  const totalUSD = accounts.reduce((s, a) => a.moneda === "USD" ? s + saldoDe(a) : s, 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>Mis Cuentas</h1>
-          <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.38)" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--fg-hi)" }}>Mis Cuentas</h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--fg-5)" }}>
             {accounts.length} cuenta{accounts.length !== 1 ? "s" : ""} registrada{accounts.length !== 1 ? "s" : ""}
           </p>
         </div>
@@ -122,7 +127,7 @@ export default function CuentasClient({ initialAccounts }: CuentasClientProps) {
 
       {/* Patrimonio consolidado */}
       <div className="glass-card p-5" style={{ background: "linear-gradient(135deg, rgba(108,99,255,0.10), rgba(34,211,238,0.06))", borderColor: "rgba(108,99,255,0.18)" }}>
-        <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "rgba(255,255,255,0.35)" }}>
+        <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--fg-6)" }}>
           Patrimonio consolidado
         </p>
         <div className="flex flex-wrap items-baseline gap-4">
@@ -138,10 +143,10 @@ export default function CuentasClient({ initialAccounts }: CuentasClientProps) {
       {accounts.length === 0 ? (
         <div className="glass-card p-16 text-center">
           <p className="text-5xl mb-4">💳</p>
-          <h3 className="text-lg font-semibold mb-2" style={{ color: "rgba(255,255,255,0.9)" }}>
+          <h3 className="text-lg font-semibold mb-2" style={{ color: "var(--fg-1)" }}>
             No tenés cuentas registradas
           </h3>
-          <p className="text-sm max-w-sm mx-auto mb-8" style={{ color: "rgba(255,255,255,0.40)" }}>
+          <p className="text-sm max-w-sm mx-auto mb-8" style={{ color: "var(--fg-5)" }}>
             Agregá tus bancos, billeteras digitales u otros activos para llevar el control de tu patrimonio.
           </p>
           <button onClick={openCreate} className="btn-primary mx-auto">
@@ -158,7 +163,7 @@ export default function CuentasClient({ initialAccounts }: CuentasClientProps) {
                 <button
                   onClick={() => openEdit(cuenta)}
                   className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                  style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.50)" }}
+                  style={{ background: "var(--bg-hover)", color: "var(--fg-4)" }}
                   title="Editar cuenta"
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -175,25 +180,25 @@ export default function CuentasClient({ initialAccounts }: CuentasClientProps) {
                     {cuenta.icono || cfg.icon}
                   </div>
                   <div className="min-w-0">
-                    <p className="font-semibold text-sm truncate" style={{ color: "rgba(255,255,255,0.92)" }}>
+                    <p className="font-semibold text-sm truncate" style={{ color: "var(--fg-1)" }}>
                       {cuenta.nombre}
                     </p>
-                    <p className="text-xs truncate" style={{ color: "rgba(255,255,255,0.38)" }}>
+                    <p className="text-xs truncate" style={{ color: "var(--fg-5)" }}>
                       {cfg.label}
                     </p>
                   </div>
                 </div>
-                <div className="pt-3 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
-                  <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.28)" }}>
+                <div className="pt-3 border-t" style={{ borderColor: "var(--bd-faint)" }}>
+                  <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--fg-6)" }}>
                     Saldo
                   </p>
-                  <p className="text-xl font-bold" style={{ color: cuenta.moneda === "USD" ? "#84CC16" : "rgba(255,255,255,0.95)" }}>
+                  <p className="text-xl font-bold" style={{ color: cuenta.moneda === "USD" ? "#84CC16" : "var(--fg-hi)" }}>
                     {cuenta.moneda === "USD"
-                      ? `U$S ${Number(cuenta.saldo_inicial).toLocaleString("es-AR")}`
-                      : formatCurrency(cuenta.saldo_inicial, "ARS", true)}
+                      ? `U$S ${saldoDe(cuenta).toLocaleString("es-AR")}`
+                      : formatCurrency(saldoDe(cuenta), "ARS", true)}
                   </p>
                   {(cuenta.alias || cuenta.cbu) && (
-                    <p className="text-xs mt-1.5 truncate font-mono" style={{ color: "rgba(255,255,255,0.30)" }}>
+                    <p className="text-xs mt-1.5 truncate font-mono" style={{ color: "var(--fg-6)" }}>
                       {cuenta.alias ? `✦ ${cuenta.alias}` : cuenta.cbu}
                     </p>
                   )}
@@ -207,30 +212,30 @@ export default function CuentasClient({ initialAccounts }: CuentasClientProps) {
       {/* Modal crear / editar cuenta */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="glass-card w-full max-w-md animate-slide-up" style={{ maxHeight: "90vh", overflowY: "auto" }}>
+          <div className="glass-card modal-panel w-full max-w-md animate-slide-up">
             <div className="p-6">
               <div className="flex items-start justify-between mb-1">
-                <h2 className="text-xl font-bold" style={{ color: "rgba(255,255,255,0.9)" }}>
+                <h2 className="text-xl font-bold" style={{ color: "var(--fg-1)" }}>
                   {editingId ? "Editar cuenta" : "Nueva cuenta"}
                 </h2>
                 <button
                   type="button"
                   onClick={() => { setShowModal(false); resetForm(); }}
                   className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 flex-shrink-0 ml-2"
-                  style={{ color: "rgba(255,255,255,0.35)" }}
+                  style={{ color: "var(--fg-6)" }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
                 </button>
               </div>
-              <p className="text-sm mb-6" style={{ color: "rgba(255,255,255,0.38)" }}>
+              <p className="text-sm mb-6" style={{ color: "var(--fg-5)" }}>
                 {editingId ? "Modificá los datos de tu cuenta" : "Registrá un banco, billetera o caja de efectivo"}
               </p>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>
                     Nombre de la cuenta *
                   </label>
                   <input
@@ -245,7 +250,7 @@ export default function CuentasClient({ initialAccounts }: CuentasClientProps) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Tipo</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Tipo</label>
                     <select
                       className="input-field"
                       value={tipo}
@@ -262,7 +267,7 @@ export default function CuentasClient({ initialAccounts }: CuentasClientProps) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Moneda</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Moneda</label>
                     <select className="input-field" value={moneda} onChange={e => setMoneda(e.target.value)}>
                       <option value="ARS">$ ARS</option>
                       <option value="USD">U$S USD</option>
@@ -271,7 +276,7 @@ export default function CuentasClient({ initialAccounts }: CuentasClientProps) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>
                     Saldo {editingId ? "actual" : "inicial"}
                   </label>
                   <input
@@ -288,11 +293,11 @@ export default function CuentasClient({ initialAccounts }: CuentasClientProps) {
                 {/* CBU / Alias — solo para cuentas bancarias */}
                 {showBankFields && (
                   <div className="space-y-3 pt-1">
-                    <p className="text-xs font-semibold uppercase" style={{ color: "rgba(255,255,255,0.28)" }}>
+                    <p className="text-xs font-semibold uppercase" style={{ color: "var(--fg-6)" }}>
                       Datos bancarios <span className="normal-case font-normal">(opcional)</span>
                     </p>
                     <div>
-                      <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                      <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>
                         CBU
                       </label>
                       <input
@@ -310,7 +315,7 @@ export default function CuentasClient({ initialAccounts }: CuentasClientProps) {
                       )}
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                      <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>
                         Alias
                       </label>
                       <input

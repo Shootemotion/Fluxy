@@ -33,3 +33,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# resúmenes bancarios y otros documentos personales usados para probar el importador
+/DOCS/

@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { updateMovement, updateMovementsCategoryBulk, createCategory } from "@/lib/actions";
+import { updateMovement, updateMovementsCategoryBulk, createCategory, aprenderCategoria } from "@/lib/actions";
+import { clavePatron } from "@/lib/categorizacion";
 
 const EMOJIS = ["🛒","🚗","🏠","🍔","💊","🎬","✈️","📱","💻","👕","🎓","⚕️","🐾","💡","💧","🔥","💳","💰","🎁","🚌","☕","🍺","💪","🎮"];
 
@@ -45,6 +46,7 @@ export default function PulirClient({ movements: initial, categories: initialCat
     if (!current || loading) return;
     setLoading(true);
     const idsToUpdate = [current.id, ...(applyToSimilar ? similarIds : [])];
+    const patron = clavePatron(current.descripcion || "");
     // Optimistic remove
     setMovements(prev => prev.filter(m => !idsToUpdate.includes(m.id)));
     try {
@@ -53,6 +55,13 @@ export default function PulirClient({ movements: initial, categories: initialCat
       } else {
         await updateMovementsCategoryBulk(idsToUpdate, categoriaId);
       }
+
+      // Se recuerda la decisión para que la próxima importación la aplique
+      // sola. No se espera: si falla, el movimiento ya quedó categorizado.
+      if (patron) {
+        aprenderCategoria(patron, categoriaId).catch(() => {});
+      }
+
       toast.success(
         idsToUpdate.length > 1
           ? `✅ ${idsToUpdate.length} movimientos categorizados`
@@ -101,8 +110,8 @@ export default function PulirClient({ movements: initial, categories: initialCat
     return (
       <div className="max-w-lg mx-auto text-center py-20 animate-fade-in">
         <div className="text-7xl mb-5">🎉</div>
-        <p className="text-2xl font-bold mb-2" style={{ color: "rgba(255,255,255,0.92)" }}>¡Todo prolijo!</p>
-        <p className="text-sm mb-8" style={{ color: "rgba(255,255,255,0.4)" }}>
+        <p className="text-2xl font-bold mb-2" style={{ color: "var(--fg-1)" }}>¡Todo prolijo!</p>
+        <p className="text-sm mb-8" style={{ color: "var(--fg-5)" }}>
           No quedan movimientos sin categoría. El dashboard y los reportes están al día.
         </p>
         <div className="flex gap-3 justify-center">
@@ -121,14 +130,14 @@ export default function PulirClient({ movements: initial, categories: initialCat
       {/* Progress */}
       <div>
         <div className="flex justify-between items-center mb-2">
-          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.35)" }}>
+          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--fg-6)" }}>
             Progreso
           </span>
-          <span className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.65)" }}>
+          <span className="text-sm font-bold" style={{ color: "var(--fg-3)" }}>
             {movements.length} restantes de {total}
           </span>
         </div>
-        <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+        <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--bg-hover)" }}>
           <div
             className="h-full rounded-full transition-all duration-500"
             style={{ width: `${progress}%`, background: "linear-gradient(90deg, #6C63FF, #22D3EE)" }}
@@ -140,11 +149,11 @@ export default function PulirClient({ movements: initial, categories: initialCat
       <div className="glass-card p-6 animate-slide-up" key={current.id}>
         <div className="flex justify-between items-start mb-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.4)" }}>
+            <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }}>
               {current.fecha}
             </span>
             {current.cuentas?.nombre && (
-              <span className="text-xs px-2 py-0.5 rounded" style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.35)" }}>
+              <span className="text-xs px-2 py-0.5 rounded" style={{ background: "var(--bg-faint)", color: "var(--fg-6)" }}>
                 {current.cuentas.nombre}
               </span>
             )}
@@ -154,19 +163,19 @@ export default function PulirClient({ movements: initial, categories: initialCat
           </span>
         </div>
 
-        <p className="text-base font-medium leading-snug mb-4" style={{ color: "rgba(255,255,255,0.88)" }}>
-          {current.descripcion || <span style={{ color: "rgba(255,255,255,0.3)" }}>(sin descripción)</span>}
+        <p className="text-base font-medium leading-snug mb-4" style={{ color: "var(--fg-1)" }}>
+          {current.descripcion || <span style={{ color: "var(--fg-6)" }}>(sin descripción)</span>}
         </p>
 
         <div className="flex items-end justify-between">
           <span className={`text-3xl font-bold font-mono ${current.tipo === "ingreso" ? "text-emerald-400" : "text-rose-400"}`}>
             {current.tipo === "ingreso" ? "+" : "-"}${Math.abs(current.monto).toLocaleString("es-AR")}
-            <span className="text-sm font-normal ml-1.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+            <span className="text-sm font-normal ml-1.5" style={{ color: "var(--fg-6)" }}>
               {current.moneda || "ARS"}
             </span>
           </span>
           {applyToSimilar && similarIds.length > 0 && (
-            <span className="text-xs text-right" style={{ color: "rgba(255,255,255,0.3)" }}>
+            <span className="text-xs text-right" style={{ color: "var(--fg-6)" }}>
               +{similarIds.length} similar{similarIds.length > 1 ? "es" : ""}
             </span>
           )}
@@ -182,7 +191,7 @@ export default function PulirClient({ movements: initial, categories: initialCat
             onChange={e => setApplyToSimilar(e.target.checked)}
             className="w-4 h-4 rounded accent-[#6C63FF]"
           />
-          <span className="text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
+          <span className="text-sm" style={{ color: "var(--fg-4)" }}>
             Aplicar también a {similarIds.length} movimiento{similarIds.length > 1 ? "s" : ""} con descripción similar
           </span>
         </label>
@@ -190,7 +199,7 @@ export default function PulirClient({ movements: initial, categories: initialCat
 
       {/* Category grid */}
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "rgba(255,255,255,0.3)" }}>
+        <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--fg-6)" }}>
           Elegí una categoría
         </p>
         <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
@@ -201,12 +210,12 @@ export default function PulirClient({ movements: initial, categories: initialCat
               disabled={loading}
               className="flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all hover:scale-[1.04] active:scale-95 disabled:opacity-50"
               style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "var(--bg-faint)",
+                border: "1px solid var(--bd)",
               }}
             >
               <span className="text-2xl">{cat.icono || "🏷️"}</span>
-              <span className="text-[10px] text-center leading-tight line-clamp-2" style={{ color: "rgba(255,255,255,0.65)" }}>
+              <span className="text-[10px] text-center leading-tight line-clamp-2" style={{ color: "var(--fg-3)" }}>
                 {cat.nombre}
               </span>
             </button>
@@ -230,14 +239,14 @@ export default function PulirClient({ movements: initial, categories: initialCat
 
       {/* Footer actions */}
       <div className="flex justify-between items-center pt-1">
-        <span className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
+        <span className="text-xs" style={{ color: "var(--fg-7)" }}>
           Podés saltar y volver más tarde
         </span>
         <button
           onClick={skip}
           disabled={loading}
           className="text-sm px-4 py-2 rounded-lg transition-colors hover:bg-white/5"
-          style={{ color: "rgba(255,255,255,0.35)" }}
+          style={{ color: "var(--fg-6)" }}
         >
           Saltar →
         </button>
@@ -246,14 +255,14 @@ export default function PulirClient({ movements: initial, categories: initialCat
       {/* New category modal */}
       {showNewCat && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="glass-card w-full max-w-sm p-6 animate-slide-up">
-            <h2 className="text-xl font-bold mb-1" style={{ color: "rgba(255,255,255,0.9)" }}>Nueva Categoría</h2>
-            <p className="text-xs mb-5" style={{ color: "rgba(255,255,255,0.35)" }}>
+          <div className="glass-card modal-panel w-full max-w-sm p-6 animate-slide-up">
+            <h2 className="text-xl font-bold mb-1" style={{ color: "var(--fg-1)" }}>Nueva Categoría</h2>
+            <p className="text-xs mb-5" style={{ color: "var(--fg-6)" }}>
               Se creará como categoría de tipo <b>{current.tipo}</b> y se asignará al movimiento actual.
             </p>
             <form onSubmit={handleCreateCategory} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Nombre</label>
+                <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Nombre</label>
                 <input
                   className="input-field"
                   type="text"
@@ -265,7 +274,7 @@ export default function PulirClient({ movements: initial, categories: initialCat
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Ícono</label>
+                <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Ícono</label>
                 <div className="grid grid-cols-6 gap-2">
                   {EMOJIS.map(em => (
                     <button

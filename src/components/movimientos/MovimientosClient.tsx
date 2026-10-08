@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { formatCurrency, formatDateToLocalISO } from "@/lib/utils";
-import { updateMovement, deleteMovement } from "@/lib/actions";
+import { updateMovement, deleteMovement, getMovements } from "@/lib/actions";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -18,12 +18,44 @@ const TIPO_CONFIG: Record<string, { icon: string; color: string; bg: string; lab
 
 interface MovimientosClientProps {
   initialMovements: any[];
+  totalMovements?: number;
+  pageSize?: number;
   categories: any[];
   accounts: any[];
 }
 
-export default function MovimientosClient({ initialMovements, categories, accounts }: MovimientosClientProps) {
+export default function MovimientosClient({
+  initialMovements,
+  totalMovements,
+  pageSize = 500,
+  categories,
+  accounts,
+}: MovimientosClientProps) {
   const [movements, setMovements] = useState(initialMovements);
+
+  // The server only sends the first page; filters and search below run over
+  // what has been loaded, so older movements need to be pulled in explicitly.
+  const [loadingMore, setLoadingMore] = useState(false);
+  const total = totalMovements ?? initialMovements.length;
+  const hasMore = movements.length < total;
+
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const next = await getMovements(pageSize, movements.length);
+      if (next.length === 0) return;
+      // Guard against duplicates if a movement was added since the first load.
+      setMovements(prev => {
+        const seen = new Set(prev.map((m: any) => m.id));
+        return [...prev, ...next.filter((m: any) => !seen.has(m.id))];
+      });
+    } catch (err: any) {
+      toast.error("No se pudieron cargar más movimientos");
+      console.error(err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   // Filters
   const [filtroTipo, setFiltroTipo]           = useState("todos");
@@ -116,7 +148,7 @@ export default function MovimientosClient({ initialMovements, categories, accoun
   ].filter(Boolean).length;
 
   const filteredAndSorted = useMemo(() => {
-    let result = movements.filter(m => {
+    const result = movements.filter(m => {
       if (filtroTipo !== "todos" && m.tipo !== filtroTipo) return false;
       if (filtroCategoria !== "todas" && m.categoria_id !== filtroCategoria) return false;
       if (filtroCuenta !== "todas" && m.cuenta_origen_id !== filtroCuenta) return false;
@@ -140,8 +172,10 @@ export default function MovimientosClient({ initialMovements, categories, accoun
     return result;
   }, [movements, filtroTipo, filtroCategoria, filtroCuenta, filtroMoneda, busqueda, filtroDesde, filtroHasta, ordenarPor]);
 
-  // Reset page when filters change
-  useMemo(() => setCurrentPage(1), [filtroTipo, filtroCategoria, filtroCuenta, filtroMoneda, busqueda, filtroDesde, filtroHasta, ordenarPor, agruparPor]);
+  // Reset page when filters change. This is a side effect, so it belongs in
+  // useEffect — a useMemo body may be re-run or skipped by React at will.
+  useEffect(() => { setCurrentPage(1); },
+    [filtroTipo, filtroCategoria, filtroCuenta, filtroMoneda, busqueda, filtroDesde, filtroHasta, ordenarPor, agruparPor]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / itemsPerPage));
   const paginated  = useMemo(() => filteredAndSorted.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [filteredAndSorted, currentPage]);
@@ -201,6 +235,81 @@ export default function MovimientosClient({ initialMovements, categories, accoun
     URL.revokeObjectURL(url);
   }
 
+  /**
+   * Versión en tarjeta para pantallas chicas.
+   *
+   * La tabla tiene seis columnas y en un teléfono obliga a scrollear de
+   * costado para ver el monto. Además sus botones de editar y borrar sólo
+   * aparecen con :hover, que en una pantalla táctil no existe — acá están
+   * siempre visibles.
+   */
+  const renderMovimientoCard = (mov: any) => {
+    const cfg = TIPO_CONFIG[mov.tipo] || TIPO_CONFIG.gasto;
+    const isDeleting = deletingId === mov.id;
+    const esIngreso = mov.tipo === "ingreso";
+
+    return (
+      <div key={mov.id} className="px-4 py-3 border-b last:border-b-0" style={{ borderColor: "var(--bd-faint)" }}>
+        <div className="flex items-start gap-3">
+          <span
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-base flex-shrink-0 mt-0.5"
+            style={{ background: cfg.bg }}
+          >
+            {cfg.icon}
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium leading-snug break-words" style={{ color: "var(--fg-1)" }}>
+              {mov.descripcion || "—"}
+            </p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
+              <span className="text-[11px] font-mono" style={{ color: "var(--fg-5)" }}>{mov.fecha}</span>
+              <span style={{ color: "var(--fg-7)" }}>·</span>
+              <span className="badge badge-muted text-[10px] uppercase tracking-wide">
+                {mov.categorias?.nombre || "Otros"}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+            <span className={`font-mono font-bold text-sm whitespace-nowrap ${esIngreso ? "text-emerald-400" : "text-rose-400"}`}>
+              {esIngreso ? "+" : "−"}{formatCurrency(mov.monto, mov.moneda || "ARS")}
+            </span>
+
+            {isDeleting ? (
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => handleDelete(mov.id)} disabled={deleteLoading}
+                  aria-label="Confirmar borrado"
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-sm font-bold"
+                  style={{ background: "rgba(239,68,68,0.20)", color: "#EF4444" }}>✓</button>
+                <button onClick={() => setDeletingId(null)} aria-label="Cancelar"
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-sm"
+                  style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }}>✕</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => openEdit(mov)} aria-label="Editar movimiento"
+                  className="w-9 h-9 flex items-center justify-center rounded-lg"
+                  style={{ background: "var(--bg-hover)", color: "var(--fg-4)" }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                  </svg>
+                </button>
+                <button onClick={() => setDeletingId(mov.id)} aria-label="Eliminar movimiento"
+                  className="w-9 h-9 flex items-center justify-center rounded-lg"
+                  style={{ background: "var(--bg-hover)", color: "var(--fg-4)" }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderMovimientoRow = (mov: any) => {
     const cfg = TIPO_CONFIG[mov.tipo] || TIPO_CONFIG.gasto;
     const isDeleting = deletingId === mov.id;
@@ -214,9 +323,9 @@ export default function MovimientosClient({ initialMovements, categories, accoun
             <span className="text-xs font-semibold hidden sm:inline" style={{ color: cfg.color }}>{cfg.label}</span>
           </div>
         </td>
-        <td className="text-xs font-mono whitespace-nowrap" style={{ color: "rgba(255,255,255,0.38)" }}>{mov.fecha}</td>
+        <td className="text-xs font-mono whitespace-nowrap" style={{ color: "var(--fg-5)" }}>{mov.fecha}</td>
         <td style={{ maxWidth: "220px" }}>
-          <span className="block truncate text-sm font-medium" style={{ color: "rgba(255,255,255,0.9)" }}>
+          <span className="block truncate text-sm font-medium" style={{ color: "var(--fg-1)" }}>
             {mov.descripcion || "—"}
           </span>
         </td>
@@ -238,20 +347,20 @@ export default function MovimientosClient({ initialMovements, categories, accoun
                 style={{ background: "rgba(239,68,68,0.20)", color: "#EF4444" }}>✓</button>
               <button onClick={() => setDeletingId(null)}
                 className="w-7 h-7 flex items-center justify-center rounded-lg text-xs"
-                style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.40)" }}>✕</button>
+                style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }}>✕</button>
             </div>
           ) : (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={() => openEdit(mov)}
                 className="w-7 h-7 flex items-center justify-center rounded-lg"
-                style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.45)" }} title="Editar">
+                style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }} title="Editar">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                 </svg>
               </button>
               <button onClick={() => setDeletingId(mov.id)}
                 className="w-7 h-7 flex items-center justify-center rounded-lg"
-                style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.45)" }} title="Eliminar">
+                style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }} title="Eliminar">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                 </svg>
@@ -268,8 +377,8 @@ export default function MovimientosClient({ initialMovements, categories, accoun
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>Movimientos</h1>
-          <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.38)" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--fg-hi)" }}>Movimientos</h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--fg-5)" }}>
             {filteredAndSorted.length} registro{filteredAndSorted.length !== 1 ? "s" : ""}
             {activeFilterCount > 0 && <span className="ml-1.5 text-indigo-400">({activeFilterCount} filtro{activeFilterCount !== 1 ? "s" : ""})</span>}
           </p>
@@ -301,7 +410,7 @@ export default function MovimientosClient({ initialMovements, categories, accoun
         {Object.entries(totals).flatMap(([cur, t]) => [
           t.ingresos > 0 && (
             <div key={`ing-${cur}`} className="glass-card p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--fg-6)" }}>
                 Ingresos {cur !== "ARS" ? cur : ""}
               </p>
               <p className="text-lg font-bold text-emerald-400">{formatCurrency(t.ingresos, cur, true)}</p>
@@ -309,7 +418,7 @@ export default function MovimientosClient({ initialMovements, categories, accoun
           ),
           t.gastos > 0 && (
             <div key={`gas-${cur}`} className="glass-card p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--fg-6)" }}>
                 Gastos {cur !== "ARS" ? cur : ""}
               </p>
               <p className="text-lg font-bold text-rose-400">{formatCurrency(t.gastos, cur, true)}</p>
@@ -318,8 +427,8 @@ export default function MovimientosClient({ initialMovements, categories, accoun
         ]).filter(Boolean)}
         {Object.keys(totals).length === 0 && (
           <>
-            <div className="glass-card p-4"><p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "rgba(255,255,255,0.35)" }}>Ingresos</p><p className="text-lg font-bold text-emerald-400">$0</p></div>
-            <div className="glass-card p-4"><p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "rgba(255,255,255,0.35)" }}>Gastos</p><p className="text-lg font-bold text-rose-400">$0</p></div>
+            <div className="glass-card p-4"><p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--fg-6)" }}>Ingresos</p><p className="text-lg font-bold text-emerald-400">$0</p></div>
+            <div className="glass-card p-4"><p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--fg-6)" }}>Gastos</p><p className="text-lg font-bold text-rose-400">$0</p></div>
           </>
         )}
       </div>
@@ -332,14 +441,14 @@ export default function MovimientosClient({ initialMovements, categories, accoun
             <input type="text" className="input-field pl-10" placeholder="Buscar por descripción..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)} />
             <svg className="absolute left-3 top-1/2 -translate-y-1/2" width="16" height="16" viewBox="0 0 24 24"
-              fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "rgba(255,255,255,0.25)", pointerEvents: "none" }}>
+              fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--fg-7)", pointerEvents: "none" }}>
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
           </div>
           <button
             onClick={() => setShowFilters(f => !f)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all flex-shrink-0"
-            style={{ background: showFilters ? "rgba(108,99,255,0.20)" : "rgba(255,255,255,0.06)", color: showFilters ? "#A5A0FF" : "rgba(255,255,255,0.5)", border: showFilters ? "1px solid rgba(108,99,255,0.35)" : "1px solid transparent" }}
+            style={{ background: showFilters ? "rgba(108,99,255,0.20)" : "var(--bg-hover)", color: showFilters ? "#A5A0FF" : "var(--fg-4)", border: showFilters ? "1px solid rgba(108,99,255,0.35)" : "1px solid transparent" }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
@@ -379,11 +488,11 @@ export default function MovimientosClient({ initialMovements, categories, accoun
                 <option value="USD">USD</option>
               </select>
               <div>
-                <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.35)" }}>Desde</label>
+                <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--fg-6)" }}>Desde</label>
                 <input type="date" className="input-field text-sm" value={filtroDesde} onChange={e => setFiltroDesde(e.target.value)} />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.35)" }}>Hasta</label>
+                <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--fg-6)" }}>Hasta</label>
                 <input type="date" className="input-field text-sm" value={filtroHasta} onChange={e => setFiltroHasta(e.target.value)} />
               </div>
             </div>
@@ -411,7 +520,7 @@ export default function MovimientosClient({ initialMovements, categories, accoun
         {filteredAndSorted.length === 0 ? (
           <div className="glass-card py-20 text-center">
             <p className="text-4xl mb-4">🏜️</p>
-            <p className="font-medium mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>
+            <p className="font-medium mb-1" style={{ color: "var(--fg-4)" }}>
               {activeFilterCount > 0 ? "Sin resultados para esos filtros." : "Sin movimientos aún."}
             </p>
             {activeFilterCount === 0 && (
@@ -431,7 +540,10 @@ export default function MovimientosClient({ initialMovements, categories, accoun
                   {group.gas > 0 && <span className="text-rose-400">-{formatCurrency(group.gas, "ARS")}</span>}
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="lg:hidden">
+                {group.items.map(mov => renderMovimientoCard(mov))}
+              </div>
+              <div className="hidden lg:block overflow-x-auto">
                 <table className="data-table">
                   <tbody>{group.items.map(mov => renderMovimientoRow(mov))}</tbody>
                 </table>
@@ -440,7 +552,10 @@ export default function MovimientosClient({ initialMovements, categories, accoun
           ))
         ) : (
           <div className="glass-card overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="lg:hidden">
+              {paginated.map(mov => renderMovimientoCard(mov))}
+            </div>
+            <div className="hidden lg:block overflow-x-auto">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -450,22 +565,32 @@ export default function MovimientosClient({ initialMovements, categories, accoun
                 </thead>
                 <tbody>{paginated.map(mov => renderMovimientoRow(mov))}</tbody>
               </table>
+            </div>
+            <div>
               {totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: "var(--bd-faint)" }}>
-                  <span className="text-xs" style={{ color: "rgba(255,255,255,0.38)" }}>
+                  <span className="text-xs" style={{ color: "var(--fg-4)" }}>
                     {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, filteredAndSorted.length)} de {filteredAndSorted.length}
+                    {hasMore && ` · ${movements.length} de ${total} cargados`}
                   </span>
                   <div className="flex gap-2">
                     <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
                       className="px-3 py-1 text-xs rounded-md"
-                      style={{ background: "rgba(255,255,255,0.05)", opacity: currentPage === 1 ? 0.3 : 1 }}>
+                      style={{ background: "var(--bg-input)", opacity: currentPage === 1 ? 0.3 : 1 }}>
                       Anterior
                     </button>
                     <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
                       className="px-3 py-1 text-xs rounded-md"
-                      style={{ background: "rgba(255,255,255,0.05)", opacity: currentPage === totalPages ? 0.3 : 1 }}>
+                      style={{ background: "var(--bg-input)", opacity: currentPage === totalPages ? 0.3 : 1 }}>
                       Siguiente
                     </button>
+                    {hasMore && (
+                      <button onClick={loadMore} disabled={loadingMore}
+                        className="px-3 py-1 text-xs rounded-md disabled:opacity-40"
+                        style={{ background: "var(--bg-hover)", color: "var(--primary)" }}>
+                        {loadingMore ? "Cargando..." : "Cargar más"}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -477,12 +602,12 @@ export default function MovimientosClient({ initialMovements, categories, accoun
       {/* Edit Modal */}
       {editingId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="glass-card w-full max-w-sm animate-slide-up">
+          <div className="glass-card modal-panel w-full max-w-sm animate-slide-up">
             <div className="p-6">
               <div className="flex items-start justify-between mb-5">
-                <h2 className="text-xl font-bold" style={{ color: "rgba(255,255,255,0.9)" }}>Editar movimiento</h2>
+                <h2 className="text-xl font-bold" style={{ color: "var(--fg-1)" }}>Editar movimiento</h2>
                 <button onClick={closeEdit} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5"
-                  style={{ color: "rgba(255,255,255,0.35)" }}>
+                  style={{ color: "var(--fg-6)" }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                   </svg>
@@ -490,7 +615,7 @@ export default function MovimientosClient({ initialMovements, categories, accoun
               </div>
               <form onSubmit={handleEditSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Tipo</label>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Tipo</label>
                   <select className="input-field" value={editTipo} onChange={e => setEditTipo(e.target.value)}>
                     <option value="ingreso">Ingreso</option>
                     <option value="gasto">Gasto</option>
@@ -501,12 +626,12 @@ export default function MovimientosClient({ initialMovements, categories, accoun
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Monto *</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Monto *</label>
                     <input className="input-field" type="number" step="0.01" min="0" required
                       value={editMonto} onChange={e => setEditMonto(e.target.value)} />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Moneda</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Moneda</label>
                     <select className="input-field" value={editMoneda} onChange={e => setEditMoneda(e.target.value)}>
                       <option value="ARS">ARS</option>
                       <option value="USD">USD</option>
@@ -514,16 +639,16 @@ export default function MovimientosClient({ initialMovements, categories, accoun
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Fecha *</label>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Fecha *</label>
                   <input className="input-field" type="date" required value={editFecha} onChange={e => setEditFecha(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Descripción</label>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Descripción</label>
                   <input className="input-field" type="text" placeholder="Ej: Supermercado, Sueldo..."
                     value={editDesc} onChange={e => setEditDesc(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Categoría</label>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Categoría</label>
                   <select className="input-field" value={editCatId} onChange={e => setEditCatId(e.target.value)}>
                     <option value="">Sin categoría</option>
                     {categories.map((c: any) => <option key={c.id} value={c.id}>{c.icono} {c.nombre}</option>)}

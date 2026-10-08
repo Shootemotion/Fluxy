@@ -1,4 +1,4 @@
-import { getAccounts } from "@/lib/actions";
+import { getAccountsWithBalances } from "@/lib/actions";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import CuentasClient from "@/components/cuentas/CuentasClient";
@@ -11,7 +11,7 @@ export default async function CuentasPage() {
     redirect("/auth/login");
   }
 
-  const accounts = await getAccounts();
+  const accounts = await getAccountsWithBalances();
 
   return (
     <div className="p-4 lg:p-8 animate-fade-in">

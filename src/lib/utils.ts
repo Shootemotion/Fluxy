@@ -60,12 +60,6 @@ export function formatDateToLocalISO(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function getVariationClass(value: number): string {
-  if (value > 0) return "text-success-DEFAULT";
-  if (value < 0) return "text-danger-DEFAULT";
-  return "text-text-secondary";
-}
-
 export function getProgressColor(percentage: number): string {
   if (percentage >= 80) return "#10B981"; // success
   if (percentage >= 50) return "#F59E0B"; // warning

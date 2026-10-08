@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatCurrency, getProgressColor, getProgressStatus, calculateMonthsToGoal } from "@/lib/utils";
-import { createGoal, updateGoal, createMovement } from "@/lib/actions";
+import { createGoal, updateGoal, deleteGoal, aportarAObjetivo, createMovement } from "@/lib/actions";
 
 interface ObjetivosClientProps {
   initialGoals: any[];
@@ -28,6 +28,7 @@ const ICONOS = [
 
 export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosClientProps) {
   const [goals, setGoals]     = useState(initialGoals);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading]   = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -63,14 +64,38 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
         tipo_cambio:       null,
         metodo_carga:      "manual",
       });
-      const nuevoSaldo = Number(aportarGoal.saldo_actual) + importe;
-      await updateGoal(aportarGoal.id, { saldo_actual: nuevoSaldo });
+      // Incremented server-side so two concurrent contributions can't overwrite
+      // each other; the response carries the authoritative balance.
+      const updated = await aportarAObjetivo(aportarGoal.id, importe);
+      const nuevoSaldo = Number(updated?.saldo_actual ?? Number(aportarGoal.saldo_actual) + importe);
       setGoals(gs => gs.map(g => g.id === aportarGoal.id ? { ...g, saldo_actual: nuevoSaldo } : g));
       setAportarGoal(null); setAportarMonto(""); setAportarCuentaId("");
     } catch (err: any) {
       setAportarError(err?.message ?? String(err));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDelete(goal: any) {
+    const tieneSaldo = Number(goal.saldo_actual) > 0;
+    const aviso = tieneSaldo
+      ? `"${goal.nombre}" tiene ${formatCurrency(goal.saldo_actual, "ARS", true)} acumulados.
+
+Se elimina el objetivo; los movimientos que le aportaste quedan en tu historial.
+
+¿Eliminar igual?`
+      : `¿Eliminar el objetivo "${goal.nombre}"?`;
+    if (!confirm(aviso)) return;
+
+    setDeletingId(goal.id);
+    try {
+      await deleteGoal(goal.id);
+      setGoals(gs => gs.filter(g => g.id !== goal.id));
+    } catch (err: any) {
+      alert(`No se pudo eliminar: ${err?.message ?? String(err)}`);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -236,12 +261,23 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
                     <button
                       onClick={() => openEdit(obj)}
                       className="w-8 h-8 flex items-center justify-center rounded-lg"
-                      style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.45)" }}
+                      style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }}
                       title="Editar objetivo"
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => handleDelete(obj)}
+                      disabled={deletingId === obj.id}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg disabled:opacity-40"
+                      style={{ background: "var(--bg-hover)", color: "var(--danger)" }}
+                      title="Eliminar objetivo"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
                       </svg>
                     </button>
                   </div>
@@ -260,15 +296,15 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
 
                 {/* Stats grid */}
                 <div className="grid grid-cols-3 gap-2 pt-1">
-                  <div className="rounded-xl p-3 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
+                  <div className="rounded-xl p-3 text-center" style={{ background: "var(--bg-faint)" }}>
                     <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "var(--fg-7)" }}>Tengo</p>
                     <p className="text-sm font-bold text-emerald-400">{formatCurrency(obj.saldo_actual, "ARS", true)}</p>
                   </div>
-                  <div className="rounded-xl p-3 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
+                  <div className="rounded-xl p-3 text-center" style={{ background: "var(--bg-faint)" }}>
                     <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "var(--fg-7)" }}>Faltan</p>
                     <p className="text-sm font-bold" style={{ color: "var(--fg-2)" }}>{formatCurrency(faltan, "ARS", true)}</p>
                   </div>
-                  <div className="rounded-xl p-3 text-center" style={{ background: "rgba(255,255,255,0.04)" }}>
+                  <div className="rounded-xl p-3 text-center" style={{ background: "var(--bg-faint)" }}>
                     <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "var(--fg-7)" }}>Meta</p>
                     <p className="text-sm font-bold" style={{ color: "var(--fg-2)" }}>{formatCurrency(obj.monto_objetivo, "ARS", true)}</p>
                   </div>
@@ -296,7 +332,7 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
       {/* Modal crear / editar objetivo */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="glass-card w-full max-w-md animate-slide-up" style={{ maxHeight: "90vh", overflowY: "auto" }}>
+          <div className="glass-card modal-panel w-full max-w-md animate-slide-up">
             <div className="p-6">
               <div className="flex items-start justify-between mb-1">
                 <h2 className="text-xl font-bold" style={{ color: "var(--fg-1)" }}>
@@ -385,7 +421,7 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
       {/* Modal aportar */}
       {aportarGoal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="glass-card w-full max-w-sm animate-slide-up p-6">
+          <div className="glass-card modal-panel w-full max-w-sm animate-slide-up p-6">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-xl font-bold" style={{ color: "var(--fg-1)" }}>Agregar aporte</h2>
@@ -403,7 +439,7 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
             </div>
 
             <div className="rounded-xl p-3 mb-4 flex items-center justify-between"
-              style={{ background: "rgba(255,255,255,0.04)" }}>
+              style={{ background: "var(--bg-faint)" }}>
               <span className="text-xs" style={{ color: "var(--fg-4)" }}>Saldo actual</span>
               <span className="font-mono font-bold text-sm text-emerald-400">
                 {formatCurrency(aportarGoal.saldo_actual, "ARS", true)}
@@ -446,7 +482,7 @@ export default function ObjetivosClient({ initialGoals, accounts }: ObjetivosCli
               {aportarMonto && parseFloat(aportarMonto) > 0 && (
                 <div className="rounded-xl p-3 flex items-center justify-between"
                   style={{ background: "rgba(108,99,255,0.08)", border: "1px solid rgba(108,99,255,0.20)" }}>
-                  <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>Nuevo saldo</span>
+                  <span className="text-xs" style={{ color: "var(--fg-5)" }}>Nuevo saldo</span>
                   <span className="font-mono font-bold text-sm" style={{ color: "#A5A0FF" }}>
                     {formatCurrency(Number(aportarGoal.saldo_actual) + parseFloat(aportarMonto), "ARS", true)}
                   </span>

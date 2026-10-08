@@ -1,4 +1,4 @@
-import { getMovementsForReport, getPosiciones, getPlazos, getAccounts, getLatestTCUSD } from "@/lib/actions";
+import { getMovementsForReport, getPosiciones, getPlazos, getAccountsWithBalances, getLatestValuations, getLatestTCUSD } from "@/lib/actions";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import ReportesClient from "@/components/reportes/ReportesClient";
@@ -12,19 +12,19 @@ export default async function ReportesPage() {
   const start = new Date(today.getFullYear(), today.getMonth() - 5, 1).toISOString().split("T")[0];
   const end   = today.toISOString().split("T")[0];
 
-  const [movements, posiciones, plazos, accounts, tcUsd, valuacionesResult] = await Promise.all([
+  const [movements, posiciones, plazos, accounts, tcUsd, valuaciones] = await Promise.all([
     getMovementsForReport(start, end),
     getPosiciones(),
     getPlazos(),
-    getAccounts(),
+    getAccountsWithBalances(),
     getLatestTCUSD(),
-    supabase.from("valuaciones").select("instrumento_nombre, monto, moneda").eq("usuario_id", user.id).eq("es_ultima", true),
+    getLatestValuations(),
   ]);
 
   const portfolioData = {
     posiciones,
     plazos,
-    valuaciones: valuacionesResult.data || [],
+    valuaciones,
     accounts,
     tcUsd,
   };
@@ -32,8 +32,8 @@ export default async function ReportesPage() {
   return (
     <div className="p-4 lg:p-8 animate-fade-in">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>Reportes</h1>
-        <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.38)" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--fg-hi)" }}>Reportes</h1>
+        <p className="text-sm mt-0.5" style={{ color: "var(--fg-5)" }}>
           Análisis histórico · distinto del Dashboard que muestra el estado actual y proyecciones
         </p>
       </div>

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 import { signInWithGoogle } from "@/lib/actions";
 import Link from "next/link";
 
@@ -13,7 +12,6 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const router = useRouter();
   const supabase = createClient();
 
   async function handleRegister(e: React.FormEvent) {
@@ -47,8 +45,8 @@ export default function RegisterPage() {
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(16,185,129,0.15)", border: "2px solid #10B981" }}>
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
-            <h2 className="text-2xl font-bold mb-2" style={{ color: "rgba(255,255,255,0.9)" }}>¡Cuenta creada!</h2>
-            <p className="text-sm mb-6" style={{ color: "rgba(255,255,255,0.5)" }}>Revisá tu email para confirmar tu cuenta y luego podés iniciar sesión.</p>
+            <h2 className="text-2xl font-bold mb-2" style={{ color: "var(--fg-1)" }}>¡Cuenta creada!</h2>
+            <p className="text-sm mb-6" style={{ color: "var(--fg-4)" }}>Revisá tu email para confirmar tu cuenta y luego podés iniciar sesión.</p>
             <Link href="/auth/login" className="btn-primary w-full justify-center py-3 rounded-xl text-base">
               Ir al login
             </Link>
@@ -77,26 +75,26 @@ export default function RegisterPage() {
         </div>
 
         <div className="glass-card p-8">
-          <h2 className="text-xl font-semibold mb-1" style={{ color: "rgba(255,255,255,0.9)" }}>Creá tu cuenta</h2>
-          <p className="text-sm mb-6" style={{ color: "rgba(255,255,255,0.45)" }}>Empezá a controlar tus finanzas hoy</p>
+          <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--fg-1)" }}>Creá tu cuenta</h2>
+          <p className="text-sm mb-6" style={{ color: "var(--fg-5)" }}>Empezá a controlar tus finanzas hoy</p>
 
           {error && (
             <div className="alert-card danger mb-4">
-              <span className="text-sm" style={{ color: "rgba(255,255,255,0.8)" }}>{error}</span>
+              <span className="text-sm" style={{ color: "var(--fg-2)" }}>{error}</span>
             </div>
           )}
 
           <form onSubmit={handleRegister} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: "rgba(255,255,255,0.65)" }}>Nombre</label>
+              <label className="block text-sm font-medium mb-2" style={{ color: "var(--fg-3)" }}>Nombre</label>
               <input type="text" className="input-field" placeholder="Tu nombre" value={nombre} onChange={e => setNombre(e.target.value)} required />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: "rgba(255,255,255,0.65)" }}>Email</label>
+              <label className="block text-sm font-medium mb-2" style={{ color: "var(--fg-3)" }}>Email</label>
               <input type="email" className="input-field" placeholder="tu@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: "rgba(255,255,255,0.65)" }}>Contraseña</label>
+              <label className="block text-sm font-medium mb-2" style={{ color: "var(--fg-3)" }}>Contraseña</label>
               <input type="password" className="input-field" placeholder="Mínimo 6 caracteres" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} />
             </div>
 
@@ -106,9 +104,9 @@ export default function RegisterPage() {
           </form>
 
           <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
-            <span className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>o</span>
-            <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+            <div className="flex-1 h-px" style={{ background: "var(--bg-hover)" }} />
+            <span className="text-xs" style={{ color: "var(--fg-6)" }}>o</span>
+            <div className="flex-1 h-px" style={{ background: "var(--bg-hover)" }} />
           </div>
 
           <button
@@ -129,7 +127,7 @@ export default function RegisterPage() {
             Unirme con Google
           </button>
 
-          <p className="text-center text-sm mt-6" style={{ color: "rgba(255,255,255,0.4)" }}>
+          <p className="text-center text-sm mt-6" style={{ color: "var(--fg-5)" }}>
             ¿Ya tenés cuenta?{" "}
             <Link href="/auth/login" className="font-medium hover:underline" style={{ color: "#6C63FF" }}>Iniciá sesión</Link>
           </p>

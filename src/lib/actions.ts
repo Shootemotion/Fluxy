@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { Database } from "@/lib/supabase/types";
+import { computeAccountBalances, sumAccountsInArs } from "@/lib/balances";
 
 type Tables = Database['public']['Tables'];
 
@@ -57,6 +58,40 @@ export async function getAccounts() {
     .order("orden", { ascending: true });
 
   return accounts || [];
+}
+
+/**
+ * Accounts with their real balance: saldo_inicial adjusted by every movement
+ * that touched the account. Use this anywhere a current balance is shown —
+ * getAccounts() only returns the opening balance.
+ */
+export async function getAccountsWithBalances() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const [accountsRes, movementsRes, tcUsd] = await Promise.all([
+    supabase
+      .from("cuentas")
+      .select("*")
+      .eq("usuario_id", user.id)
+      .order("orden", { ascending: true }),
+    supabase
+      .from("movimientos")
+      .select("tipo, monto, moneda, tipo_cambio, cuenta_origen_id, cuenta_destino_id")
+      .eq("usuario_id", user.id),
+    getLatestTCUSD(),
+  ]);
+
+  if (accountsRes.error) {
+    console.error("getAccountsWithBalances accounts error:", accountsRes.error.message);
+    return [];
+  }
+  if (movementsRes.error) {
+    console.error("getAccountsWithBalances movements error:", movementsRes.error.message);
+  }
+
+  return computeAccountBalances(accountsRes.data || [], movementsRes.data || [], tcUsd);
 }
 
 export async function createAccount(account: Omit<Tables['cuentas']['Insert'], 'usuario_id'>) {
@@ -138,10 +173,13 @@ export async function getCategories(tipo?: 'ingreso' | 'gasto' | 'transferencia'
 /**
  * MOVEMENTS
  */
-export async function getMovements(limit = 100) {
+export async function getMovements(limit = 100, offset = 0) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
+
+  const from = offset;
+  const to = offset + limit - 1;
 
   // Try with joins first; fall back to plain select if FK relationships aren't cached
   const { data: movements, error } = await supabase
@@ -150,7 +188,7 @@ export async function getMovements(limit = 100) {
     .eq("usuario_id", user.id)
     .order("fecha", { ascending: false })
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(from, to);
 
   if (error) {
     console.error("getMovements join failed, retrying without join:", error.message);
@@ -160,12 +198,30 @@ export async function getMovements(limit = 100) {
       .eq("usuario_id", user.id)
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false })
-      .limit(limit);
+      .range(from, to);
     if (e2) console.error("getMovements fallback error:", e2.message);
     return fallback || [];
   }
 
   return movements || [];
+}
+
+/** Total number of movements, so the list knows whether there is another page. */
+export async function getMovementsCount() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  const { count, error } = await supabase
+    .from("movimientos")
+    .select("id", { count: "exact", head: true })
+    .eq("usuario_id", user.id);
+
+  if (error) {
+    console.error("getMovementsCount error:", error.message);
+    return 0;
+  }
+  return count ?? 0;
 }
 
 export async function createMovement(movement: Omit<Tables['movimientos']['Insert'], 'usuario_id'>) {
@@ -303,6 +359,78 @@ export async function updateGoal(id: string, updates: Partial<Omit<Tables['objet
   return data;
 }
 
+export async function deleteGoal(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  // Detach the movements that pointed at this goal so their history survives.
+  await supabase
+    .from("movimientos")
+    .update({ objetivo_id: null })
+    .eq("objetivo_id", id)
+    .eq("usuario_id", user.id);
+
+  const { error } = await supabase
+    .from("objetivos")
+    .delete()
+    .eq("id", id)
+    .eq("usuario_id", user.id);
+
+  if (error) throw error;
+  revalidatePath("/app/objetivos");
+  revalidatePath("/app/dashboard");
+}
+
+/**
+ * Adds to a goal's balance atomically.
+ *
+ * Reading saldo_actual and writing back saldo_actual + monto loses one of two
+ * concurrent contributions, so this goes through a Postgres function that does
+ * the increment in a single statement. If the function isn't installed yet it
+ * falls back to read-modify-write, which is still better than doing it in the
+ * browser because the round trip is server-side.
+ */
+export async function aportarAObjetivo(id: string, monto: number) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  if (!Number.isFinite(monto) || monto === 0) throw new Error("Monto inválido");
+
+  const { data: rpcData, error: rpcError } = await supabase
+    .rpc("aportar_a_objetivo", { p_objetivo_id: id, p_monto: monto });
+
+  if (!rpcError) {
+    revalidatePath("/app/objetivos");
+    revalidatePath("/app/dashboard");
+    return rpcData;
+  }
+
+  console.warn("aportar_a_objetivo RPC unavailable, falling back:", rpcError.message);
+
+  const { data: goal, error: readError } = await supabase
+    .from("objetivos")
+    .select("saldo_actual")
+    .eq("id", id)
+    .eq("usuario_id", user.id)
+    .single();
+
+  if (readError) throw readError;
+
+  const { data, error } = await supabase
+    .from("objetivos")
+    .update({ saldo_actual: Math.max(0, Number(goal.saldo_actual) + monto) })
+    .eq("id", id)
+    .eq("usuario_id", user.id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  revalidatePath("/app/objetivos");
+  revalidatePath("/app/dashboard");
+  return data;
+}
+
 /**
  * PORTFOLIO / VALUATIONS
  */
@@ -322,6 +450,35 @@ export async function createValuation(valuation: Omit<Tables['valuaciones']['Ins
   return data;
 }
 
+
+/**
+ * Latest valuation per instrument.
+ *
+ * `valuaciones` is an append-only log of snapshots — there is no "es_ultima"
+ * flag — so "current value" means the most recent row per instrumento_nombre.
+ */
+export async function getLatestValuations() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("valuaciones")
+    .select("instrumento_nombre, monto, moneda, fecha")
+    .eq("usuario_id", user.id)
+    .order("fecha", { ascending: false });
+
+  if (error) {
+    console.error("getLatestValuations error:", error.message);
+    return [];
+  }
+
+  const latest = new Map<string, { instrumento_nombre: string; monto: number; moneda: string; fecha: string }>();
+  for (const v of data || []) {
+    if (!latest.has(v.instrumento_nombre)) latest.set(v.instrumento_nombre, v as any);
+  }
+  return Array.from(latest.values());
+}
 
 /**
  * MONTHLY STATS (for charts)
@@ -517,45 +674,42 @@ export async function getDashboardStats() {
   const gastos = movements?.filter(m => m.tipo === 'gasto').reduce((s, m) => s + Number(m.monto), 0) || 0;
   const ahorro = ingresos - gastos;
   
-  // 1. Account balances (Total ARS equivalent)
-  const { data: accounts } = await supabase
-    .from("cuentas")
-    .select("moneda, saldo_inicial")
-    .eq("usuario_id", user.id);
-  const accountsArs = accounts?.reduce((s, a) => s + (a.moneda === "USD" ? Number(a.saldo_inicial) * TC_REF : Number(a.saldo_inicial)), 0) || 0;
+  // Everything below is independent — fetch it in parallel.
+  const [balancedAccounts, latestVals, posRes, pfsRes, pasivosRes] = await Promise.all([
+    // 1. Account balances: saldo_inicial adjusted by every movement
+    getAccountsWithBalances(),
+    // 3. Valuations (physical assets): latest snapshot per instrument
+    getLatestValuations(),
+    // 2. Positions (investments)
+    supabase.from("posiciones").select("moneda, monto_valorizado").eq("usuario_id", user.id),
+    // 4. Plazos fijos
+    supabase.from("plazos_fijos").select("monto_inicial, tasa_tna, plazo_dias, moneda").eq("usuario_id", user.id),
+    // 5. Liabilities
+    supabase.from("pasivos").select("moneda, saldo_pendiente, saldo_ars").eq("usuario_id", user.id),
+  ]);
 
-  // 2. Positions (Investments)
-  const { data: pos } = await supabase
-    .from("posiciones")
-    .select("moneda, monto_valorizado")
-    .eq("usuario_id", user.id);
-  const posArs = pos?.reduce((s, p) => s + (p.moneda === "USD" ? Number(p.monto_valorizado) * TC_REF : Number(p.monto_valorizado)), 0) || 0;
+  // A failed query must not silently read as "you own nothing" — log it, so a
+  // zeroed-out net worth is traceable instead of looking like real data.
+  for (const [label, res] of [["posiciones", posRes], ["plazos_fijos", pfsRes], ["pasivos", pasivosRes]] as const) {
+    if (res.error) console.error(`getDashboardStats ${label} error:`, res.error.message);
+  }
 
-  // 3. Valuations (Actual physical assets)
-  const { data: vals } = await supabase
-    .from("valuaciones")
-    .select("moneda, valor")
-    .eq("usuario_id", user.id)
-    .eq("es_ultima", true);
-  const valsArs = vals?.reduce((s, v) => s + (v.moneda === "USD" ? Number(v.valor) * TC_REF : Number(v.valor)), 0) || 0;
+  const accountsArs = sumAccountsInArs(balancedAccounts, TC_REF);
 
-  // 4. Plazos Fijos
-  const { data: pfs } = await supabase
-    .from("plazos_fijos")
-    .select("monto_inicial, tasa_tna, plazo_dias, moneda")
-    .eq("usuario_id", user.id);
-  const pfsArs = (pfs || []).reduce((acc, pf) => {
+  const posArs = (posRes.data || []).reduce(
+    (s, p) => s + (p.moneda === "USD" ? Number(p.monto_valorizado) * TC_REF : Number(p.monto_valorizado)), 0);
+
+  const valsArs = latestVals.reduce(
+    (s, v) => s + (v.moneda === "USD" ? Number(v.monto) * TC_REF : Number(v.monto)), 0);
+
+  const pfsArs = (pfsRes.data || []).reduce((acc, pf) => {
     const ganancia = Number(pf.monto_inicial) * (Number(pf.tasa_tna) / 100) * (Number(pf.plazo_dias) / 365);
     const totalArs = (Number(pf.monto_inicial) + ganancia) * (pf.moneda === "USD" ? TC_REF : 1);
     return acc + totalArs;
   }, 0);
 
-  // 5. Liabilities (Pasivos)
-  const { data: pasivos } = await supabase
-    .from("pasivos")
-    .select("moneda, saldo_pendiente, saldo_ars")
-    .eq("usuario_id", user.id);
-  const pasivosArs = pasivos?.reduce((s, p) => s + (p.moneda === "USD" ? Number(p.saldo_ars) : Number(p.saldo_pendiente)), 0) || 0;
+  const pasivosArs = (pasivosRes.data || []).reduce(
+    (s, p) => s + (p.moneda === "USD" ? Number(p.saldo_ars) : Number(p.saldo_pendiente)), 0);
 
   const totalAssets = accountsArs + posArs + valsArs + pfsArs;
   const netWorth = totalAssets - pasivosArs;
@@ -759,10 +913,11 @@ export async function evaluateAlertRules() {
     .eq("usuario_id", user.id)
     .gte("fecha", firstOfMonth);
 
-  const { data: accounts } = await supabase
-    .from("cuentas")
-    .select("id, saldo_inicial")
-    .eq("usuario_id", user.id);
+  // Balance rules need every movement ever, not just the current month, so
+  // they go through the shared balance helper instead of the scoped query above.
+  const accounts = rules.some(r => r.tipo === "saldo_cuenta")
+    ? await getAccountsWithBalances()
+    : [];
 
   const { data: goals } = await supabase
     .from("objetivos")
@@ -797,16 +952,8 @@ export async function evaluateAlertRules() {
         .filter(m => m.tipo === "gasto" && m.categoria_id === rule.categoria_id)
         .reduce((s, m) => s + Number(m.monto), 0);
     } else if (rule.tipo === "saldo_cuenta" && rule.cuenta_id) {
-      const account = (accounts || []).find(a => a.id === rule.cuenta_id);
-      if (account) {
-        const ingresos = (movements || [])
-          .filter(m => (m.tipo === "ingreso" || m.tipo === "transferencia") && m.cuenta_destino_id === rule.cuenta_id)
-          .reduce((s, m) => s + Number(m.monto), 0);
-        const gastos = (movements || [])
-          .filter(m => (m.tipo === "gasto" || m.tipo === "transferencia") && m.cuenta_origen_id === rule.cuenta_id)
-          .reduce((s, m) => s + Number(m.monto), 0);
-        currentValue = Number(account.saldo_inicial) + ingresos - gastos;
-      }
+      const account = accounts.find(a => a.id === rule.cuenta_id);
+      if (account) currentValue = account.saldo;
     } else if (rule.tipo === "objetivo_progreso" && rule.objetivo_id) {
       const goal = (goals || []).find(g => g.id === rule.objetivo_id);
       if (goal && Number(goal.meta) > 0) {
@@ -1307,6 +1454,76 @@ export async function updateMovementsCategoryBulk(ids: string[], categoriaId: st
   revalidatePath("/app/dashboard");
 }
 
+/**
+ * REGLAS DE CATEGORIZACIÓN APRENDIDAS
+ *
+ * El diccionario de lib/categorizacion.ts sabe de cadenas y rubros genéricos,
+ * pero no puede saber que "SAGOSA" es un corralón de Comodoro. Eso lo aprende
+ * de las correcciones del usuario y tiene prioridad sobre el diccionario.
+ */
+export async function getReglasCategorizacion() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("reglas_categorizacion")
+    .select("id, patron, categoria_id, aciertos, categorias (nombre, icono, color)")
+    .eq("usuario_id", user.id)
+    .order("aciertos", { ascending: false });
+
+  if (error) {
+    // La migración puede no haberse corrido todavía: sin reglas aprendidas la
+    // importación sigue funcionando con el diccionario.
+    console.error("getReglasCategorizacion error:", error.message);
+    return [];
+  }
+  return data;
+}
+
+/**
+ * Registra que `patron` va en `categoriaId`. Reforzar y cambiar de opinión se
+ * resuelven del lado de Postgres, en una sola sentencia, para que dos
+ * correcciones simultáneas no se pisen.
+ */
+export async function aprenderCategoria(patron: string, categoriaId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const limpio = (patron || "").trim();
+  if (!limpio || !categoriaId) return null;
+
+  const { data, error } = await supabase
+    .rpc("aprender_categoria", { p_patron: limpio, p_categoria_id: categoriaId });
+
+  if (error) {
+    // Aprender es una mejora, no el objetivo: si falla, el movimiento ya quedó
+    // categorizado igual y no tiene sentido romperle la acción al usuario.
+    console.error("aprenderCategoria error:", error.message);
+    return null;
+  }
+
+  revalidatePath("/app/importar");
+  return data;
+}
+
+export async function olvidarReglaCategorizacion(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const { error } = await supabase
+    .from("reglas_categorizacion")
+    .delete()
+    .eq("id", id)
+    .eq("usuario_id", user.id);
+
+  if (error) throw error;
+  revalidatePath("/app/importar");
+  revalidatePath("/app/categorias");
+}
+
 export async function uploadImportFile(formData: FormData) {
   const file = formData.get("file") as File;
   if (!file) throw new Error("No file provided");
@@ -1328,8 +1545,16 @@ export async function uploadImportFile(formData: FormData) {
     throw new Error("Error al subir el archivo a Supabase Storage. Verificá que el bucket 'importaciones' esté creado.");
   }
 
-  const { data } = supabase.storage.from('importaciones').getPublicUrl(filePath);
-  return data.publicUrl;
+  // The 'importaciones' bucket is private, so a public URL would 404.
+  const { data: signed, error: signError } = await supabase.storage
+    .from('importaciones')
+    .createSignedUrl(filePath, 60 * 60); // 1 hour
+
+  if (signError) {
+    console.error("Error signing import file URL:", signError.message);
+    return filePath;
+  }
+  return signed.signedUrl;
 }
 
 // ── Reportes ──────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { formatCurrency, getProgressColor } from "@/lib/utils";
+import { useChartTokens } from "@/lib/chart-theme";
 import Link from "next/link";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
@@ -71,9 +72,9 @@ function CustomTooltip({ active, payload, label, monthStats }: any) {
   if (!active || !payload?.length) return null;
   const isProyectado = monthStats?.find((m: any) => m.mes === label)?.proyectado;
   return (
-    <div className="rounded-xl px-4 py-3 text-xs" style={{ background: "rgba(20,20,38,0.97)", border: "1px solid rgba(255,255,255,0.08)" }}>
+    <div className="rounded-xl px-4 py-3 text-xs" style={{ background: "rgba(20,20,38,0.97)", border: "1px solid var(--bd)" }}>
       <div className="flex items-center gap-2 mb-2">
-        <p className="font-semibold" style={{ color: "rgba(255,255,255,0.7)" }}>{label}</p>
+        <p className="font-semibold" style={{ color: "var(--fg-3)" }}>{label}</p>
         {isProyectado && (
           <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: "rgba(108,99,255,0.25)", color: "#A5A0FF" }}>
             Proyectado
@@ -110,13 +111,14 @@ export default function DashboardClient({
   const [tc, setTc]                   = useState<{ oficial: number; mep: number; blue: number; fecha: string } | null>(null);
   const [tcLoading, setTcLoading]     = useState(false);
   const [selectedRate, setSelectedRate] = useState<TcRate>("mep");
+  const chart = useChartTokens();
 
   useEffect(() => {
     setTcLoading(true);
     fetch("/api/tc")
-      .then(r => r.json())
-      .then(d => setTc(d))
-      .catch(() => {})
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setTc(d && typeof d.oficial === "number" ? d : null))
+      .catch(() => setTc(null))
       .finally(() => setTcLoading(false));
   }, []);
 
@@ -219,7 +221,7 @@ export default function DashboardClient({
               Patrimonio en USD
             </p>
             {tcLoading ? (
-              <div className="h-6 w-28 rounded animate-pulse mt-0.5" style={{ background: "rgba(255,255,255,0.07)" }} />
+              <div className="h-6 w-28 rounded animate-pulse mt-0.5" style={{ background: "var(--bg-hover)" }} />
             ) : tc ? (
               <p className="text-xl font-bold" style={{ color: "#F59E0B" }}>
                 {new Intl.NumberFormat("es-AR", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -233,7 +235,7 @@ export default function DashboardClient({
 
         <div className="flex items-center gap-3">
           {/* Rate selector */}
-          <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.10)" }}>
+          <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid var(--bd)" }}>
             {(["oficial", "mep", "blue"] as TcRate[]).map(r => (
               <button key={r} onClick={() => setSelectedRate(r)}
                 className="px-3 py-1.5 text-xs font-semibold capitalize transition-all"
@@ -278,14 +280,14 @@ export default function DashboardClient({
           {true && (
             <div className="glass-card p-6">
               <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
-                <h2 className="text-base font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>
+                <h2 className="text-base font-semibold" style={{ color: "var(--fg-1)" }}>
                   Tendencia y proyección
                 </h2>
                 <div className="flex flex-wrap gap-3 items-center">
                   {/* Historial pills */}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.28)" }}>Historial</span>
-                    <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.10)" }}>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--fg-6)" }}>Historial</span>
+                    <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid var(--bd)" }}>
                       {HIST_OPTIONS.map(n => (
                         <button key={n} onClick={() => setHistRange(n)}
                           className="px-2.5 py-1.5 text-xs font-medium transition-all"
@@ -297,8 +299,8 @@ export default function DashboardClient({
                   </div>
                   {/* Futuro pills */}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.28)" }}>+ Futuro</span>
-                    <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.10)" }}>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--fg-6)" }}>+ Futuro</span>
+                    <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid var(--bd)" }}>
                       {FUT_OPTIONS.map(n => (
                         <button key={n} onClick={() => setFutureRange(n)}
                           className="px-2.5 py-1.5 text-xs font-medium transition-all"
@@ -312,27 +314,27 @@ export default function DashboardClient({
               </div>
               <ResponsiveContainer width="100%" height={220}>
                 <ComposedChart data={chartData} barCategoryGap="30%" barGap={4}>
-                  <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                  <CartesianGrid vertical={false} stroke={chart.grid} />
                   <XAxis
                     dataKey="mes"
                     interval={chartData.length > 12 ? Math.floor(chartData.length / 8) : 0}
                     tick={({ x, y, payload, index }: any) => (
                       <text x={x} y={y + 12} textAnchor="middle" fontSize={11}
-                        fill={chartData[index]?.proyectado ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.38)"}>
+                        fill={chartData[index]?.proyectado ? chart.tickMuted : chart.tick}>
                         {payload.value}
                       </text>
                     )}
                     axisLine={false} tickLine={false}
                   />
                   <YAxis
-                    tick={{ fill: "rgba(255,255,255,0.30)", fontSize: 11 }}
+                    tick={{ fill: chart.tickMuted, fontSize: 11 }}
                     axisLine={false} tickLine={false}
                     tickFormatter={v => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
                     width={44}
                   />
                   <Tooltip
                     content={<CustomTooltip monthStats={chartData} />}
-                    cursor={{ fill: "rgba(255,255,255,0.03)" }}
+                    cursor={{ fill: chart.cursor }}
                   />
                   <Bar dataKey="ingresos" radius={[4, 4, 0, 0]}>
                     {chartData.map((entry, i) => (
@@ -355,17 +357,17 @@ export default function DashboardClient({
                 </ComposedChart>
               </ResponsiveContainer>
               <div className="flex items-center gap-5 mt-3 justify-center flex-wrap">
-                <span className="flex items-center gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
+                <span className="flex items-center gap-1.5 text-xs" style={{ color: "var(--fg-5)" }}>
                   <span className="w-3 h-3 rounded-sm" style={{ background: "#10B981" }} /> Ingresos
                 </span>
-                <span className="flex items-center gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
+                <span className="flex items-center gap-1.5 text-xs" style={{ color: "var(--fg-5)" }}>
                   <span className="w-3 h-3 rounded-sm" style={{ background: "#EF4444" }} /> Gastos
                 </span>
-                <span className="flex items-center gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
+                <span className="flex items-center gap-1.5 text-xs" style={{ color: "var(--fg-5)" }}>
                   <span className="w-3 h-1 rounded-sm inline-block" style={{ background: "#6C63FF" }} /> Ahorro
                 </span>
-                <span className="flex items-center gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
-                  <span className="w-3 h-3 rounded-sm" style={{ background: "rgba(255,255,255,0.15)" }} /> Proyectado
+                <span className="flex items-center gap-1.5 text-xs" style={{ color: "var(--fg-6)" }}>
+                  <span className="w-3 h-3 rounded-sm" style={{ background: "var(--bg-strong)" }} /> Proyectado
                 </span>
               </div>
             </div>
@@ -388,10 +390,10 @@ export default function DashboardClient({
                   <div
                     key={m.id}
                     className="flex items-center justify-between gap-3 py-3 border-b last:border-0"
-                    style={{ borderColor: "rgba(255,255,255,0.05)" }}
+                    style={{ borderColor: "var(--bd-faint)" }}
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate" style={{ color: "rgba(255,255,255,0.9)" }}>
+                      <p className="text-sm font-medium truncate" style={{ color: "var(--fg-1)" }}>
                         {m.descripcion || "Sin descripción"}
                       </p>
                       <p className="text-xs mt-0.5 truncate" style={{ color: "var(--fg-5)" }}>
@@ -417,7 +419,7 @@ export default function DashboardClient({
               {initialGoals.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-3xl mb-2">🎯</p>
-                  <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>No tenés objetivos definidos</p>
+                  <p className="text-xs" style={{ color: "var(--fg-6)" }}>No tenés objetivos definidos</p>
                   <Link href="/app/objetivos" className="btn-secondary text-xs mt-4 mx-auto">Crear objetivo</Link>
                 </div>
               ) : (
@@ -428,7 +430,7 @@ export default function DashboardClient({
                     return (
                       <div key={o.id}>
                         <div className="flex items-center justify-between text-xs mb-1.5">
-                          <span className="truncate mr-2" style={{ color: "rgba(255,255,255,0.65)" }}>
+                          <span className="truncate mr-2" style={{ color: "var(--fg-3)" }}>
                             {o.icono} {o.nombre}
                           </span>
                           <span className="font-bold flex-shrink-0" style={{ color }}>{pct.toFixed(0)}%</span>

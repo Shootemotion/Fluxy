@@ -16,8 +16,8 @@ export default async function PulirPage() {
   return (
     <div className="p-4 lg:p-8 animate-fade-in">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>Pulir movimientos</h1>
-        <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.38)" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--fg-hi)" }}>Pulir movimientos</h1>
+        <p className="text-sm mt-0.5" style={{ color: "var(--fg-5)" }}>
           Clasificá los movimientos sin categoría de a uno para mantener todo ordenado
         </p>
       </div>

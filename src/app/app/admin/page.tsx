@@ -6,7 +6,7 @@ export default async function AdminDashboardPage() {
   let stats;
   try {
     stats = await getAdminStats();
-  } catch (err: any) {
+  } catch {
     return (
       <div className="p-4 lg:p-8 animate-fade-in flex flex-col items-center justify-center min-h-[50vh]">
         <span className="text-5xl mb-4">⛔</span>
@@ -75,7 +75,7 @@ function MetricCard({ title, value, icon, color }: { title: string, value: numbe
     <div className="glass-card flex items-center p-5 relative overflow-hidden group">
       <div className="absolute top-0 right-0 w-32 h-32 blur-3xl opacity-20 -mr-10 -mt-10 transition-opacity group-hover:opacity-30" style={{ background: color }} />
       <div className="flex-1">
-        <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>{title}</p>
+        <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--fg-4)" }}>{title}</p>
         <p className="text-3xl font-bold font-mono">{value.toLocaleString()}</p>
       </div>
       <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl bg-white/5 border border-white/10 ml-4">

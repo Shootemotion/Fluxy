@@ -101,7 +101,7 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }
   pagada:  { bg: "rgba(16,185,129,0.12)",  color: "#10B981", label: "Pagada"   },
   vencida: { bg: "rgba(239,68,68,0.12)",   color: "#EF4444", label: "Vencida"  },
   proxima: { bg: "rgba(245,158,11,0.15)",  color: "#F59E0B", label: "Próxima"  },
-  futura:  { bg: "rgba(255,255,255,0.05)", color: "var(--fg-6)", label: "Futura" },
+  futura: { bg: "var(--fg-7)", color: "var(--fg-6)", label: "Futura" },
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -197,7 +197,7 @@ export default function AmortizacionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/70 backdrop-blur-sm">
-      <div className="glass-card w-full max-w-4xl flex flex-col" style={{ maxHeight: "92vh" }}>
+      <div className="glass-card modal-panel w-full max-w-4xl flex flex-col">
 
         {/* ── Header ── */}
         <div className="flex items-start justify-between p-5 pb-3 flex-shrink-0">
@@ -232,7 +232,7 @@ export default function AmortizacionModal({
             { label: "Cuotas restantes", val: String(pending), color: "#F59E0B" },
             { label: "Cuota fija", val: `${Number(pasivo.cuota_uva).toLocaleString("es-AR", { maximumFractionDigits: 2 })} UVAs`, color: "#A5A0FF" },
           ].map(c => (
-            <div key={c.label} className="rounded-lg px-3 py-1.5" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <div key={c.label} className="rounded-lg px-3 py-1.5" style={{ background: "var(--bg-faint)", border: "1px solid var(--bd-faint)" }}>
               <p className="text-[10px] uppercase" style={{ color: "var(--fg-6)" }}>{c.label}</p>
               <p className="text-sm font-bold font-mono" style={{ color: c.color }}>{c.val}</p>
             </div>
@@ -247,10 +247,10 @@ export default function AmortizacionModal({
             </div>
           )}
 
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
+          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--bd)" }}>
             <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ background: "rgba(255,255,255,0.04)" }}>
+                <tr style={{ background: "var(--bg-faint)" }}>
                   <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide" style={{ color: "var(--fg-6)" }}>N°</th>
                   <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide" style={{ color: "var(--fg-6)" }}>Fecha vto.</th>
                   <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide" style={{ color: "#10B981" }}>Cap.UVA</th>
@@ -270,7 +270,7 @@ export default function AmortizacionModal({
                   return (
                     <tr key={row.nCuota}
                       style={{
-                        borderTop: "1px solid rgba(255,255,255,0.04)",
+                        borderTop: "1px solid var(--bd-faint)",
                         background: isProxima ? "rgba(245,158,11,0.05)" : isPagada ? "rgba(16,185,129,0.03)" : undefined,
                       }}>
                       <td className="px-3 py-2 font-mono font-bold" style={{ color: isProxima ? "#F59E0B" : "var(--fg-5)" }}>{row.nCuota}</td>
@@ -312,7 +312,7 @@ export default function AmortizacionModal({
                           <button
                             onClick={() => openPago(row)}
                             className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all"
-                            style={{ background: isProxima ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.06)", color: isProxima ? "#F59E0B" : "var(--fg-6)" }}>
+                            style={{ background: isProxima ? "rgba(245,158,11,0.15)" : "var(--bg-hover)", color: isProxima ? "#F59E0B" : "var(--fg-6)" }}>
                             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                               <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                             </svg>
@@ -346,7 +346,7 @@ export default function AmortizacionModal({
           <div className="flex items-center justify-between mt-3 pb-1">
             <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
               className="text-xs px-3 py-1.5 rounded-lg disabled:opacity-30 transition-all"
-              style={{ background: "rgba(255,255,255,0.06)", color: "var(--fg-5)" }}>
+              style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }}>
               ← Anteriores
             </button>
             <span className="text-[11px]" style={{ color: "var(--fg-6)" }}>
@@ -354,7 +354,7 @@ export default function AmortizacionModal({
             </span>
             <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
               className="text-xs px-3 py-1.5 rounded-lg disabled:opacity-30 transition-all"
-              style={{ background: "rgba(255,255,255,0.06)", color: "var(--fg-5)" }}>
+              style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }}>
               Siguientes →
             </button>
           </div>
@@ -362,7 +362,7 @@ export default function AmortizacionModal({
 
         {/* ── Inline payment form ── */}
         {pagoTarget && (
-          <div className="flex-shrink-0 border-t mt-2 p-5 space-y-3" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(0,0,0,0.20)" }}>
+          <div className="flex-shrink-0 border-t mt-2 p-5 space-y-3" style={{ borderColor: "var(--bd)", background: "rgba(0,0,0,0.20)" }}>
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold" style={{ color: "var(--fg-hi)" }}>
                 Registrar pago — Cuota {pagoTarget.nCuota}

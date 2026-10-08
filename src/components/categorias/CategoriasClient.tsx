@@ -96,8 +96,8 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>Categorías</h1>
-          <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.38)" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--fg-hi)" }}>Categorías</h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--fg-5)" }}>
             {categories.filter((c: any) => !c.es_sistema).length} propias · {categories.filter((c: any) => c.es_sistema).length} del sistema
           </p>
         </div>
@@ -106,9 +106,9 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
 
       {grouped.map(({ tipo, label, items }) => (
         <div key={tipo} className="glass-card overflow-hidden">
-          <div className="px-5 py-3.5 flex items-center gap-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-            <h2 className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>{label}</h2>
-            <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.45)" }}>
+          <div className="px-5 py-3.5 flex items-center gap-2" style={{ borderBottom: "1px solid var(--bd-faint)" }}>
+            <h2 className="text-sm font-semibold" style={{ color: "var(--fg-1)" }}>{label}</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }}>
               {items.length}
             </span>
           </div>
@@ -117,7 +117,7 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
               <div
                 key={cat.id}
                 className="flex items-center gap-3 px-5 py-3 group"
-                style={{ borderTop: idx > 0 ? "1px solid rgba(255,255,255,0.04)" : "none", opacity: cat.activa ? 1 : 0.45 }}
+                style={{ borderTop: idx > 0 ? "1px solid var(--bd-faint)" : "none", opacity: cat.activa ? 1 : 0.45 }}
               >
                 {/* Color dot + icon */}
                 <div
@@ -129,11 +129,11 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
 
                 {/* Name */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate" style={{ color: "rgba(255,255,255,0.88)" }}>
+                  <p className="text-sm font-medium truncate" style={{ color: "var(--fg-1)" }}>
                     {cat.nombre}
                   </p>
                   {cat.es_sistema && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.30)" }}>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "var(--bg-hover)", color: "var(--fg-6)" }}>
                       sistema
                     </span>
                   )}
@@ -145,7 +145,7 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
                     <button
                       onClick={() => openEdit(cat)}
                       className="w-8 h-8 flex items-center justify-center rounded-lg"
-                      style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.50)" }}
+                      style={{ background: "var(--bg-hover)", color: "var(--fg-4)" }}
                       title="Editar"
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -156,7 +156,7 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
                     <button
                       onClick={() => toggleActiva(cat)}
                       className="w-8 h-8 flex items-center justify-center rounded-lg"
-                      style={{ background: "rgba(255,255,255,0.06)", color: cat.activa ? "#EF4444" : "#10B981" }}
+                      style={{ background: "var(--bg-hover)", color: cat.activa ? "#EF4444" : "#10B981" }}
                       title={cat.activa ? "Desactivar" : "Activar"}
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -177,22 +177,22 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
       {categories.length === 0 && (
         <div className="glass-card p-16 text-center">
           <p className="text-4xl mb-4">🏷️</p>
-          <p className="font-medium" style={{ color: "rgba(255,255,255,0.5)" }}>No hay categorías todavía</p>
+          <p className="font-medium" style={{ color: "var(--fg-4)" }}>No hay categorías todavía</p>
         </div>
       )}
 
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="glass-card w-full max-w-sm animate-slide-up">
+          <div className="glass-card modal-panel w-full max-w-sm animate-slide-up">
             <div className="p-6">
               <div className="flex items-start justify-between mb-5">
-                <h2 className="text-xl font-bold" style={{ color: "rgba(255,255,255,0.9)" }}>
+                <h2 className="text-xl font-bold" style={{ color: "var(--fg-1)" }}>
                   {editingId ? "Editar categoría" : "Nueva categoría"}
                 </h2>
                 <button onClick={() => { setShowModal(false); resetForm(); }}
                   className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5"
-                  style={{ color: "rgba(255,255,255,0.35)" }}>
+                  style={{ color: "var(--fg-6)" }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                   </svg>
@@ -200,14 +200,14 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
               </div>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Nombre *</label>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Nombre *</label>
                   <input className="input-field" type="text" placeholder="Ej: Alimentación, Transporte..."
                     value={nombre} onChange={e => setNombre(e.target.value)} required />
                 </div>
 
                 {!editingId && (
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Tipo</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Tipo</label>
                     <select className="input-field" value={tipo} onChange={e => setTipo(e.target.value)}>
                       {Object.entries(TIPO_LABELS).map(([k, v]) => (
                         <option key={k} value={k}>{v}</option>
@@ -217,8 +217,8 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
                 )}
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Icono</label>
-                  <div className="grid grid-cols-10 gap-1 p-2 rounded-xl mb-2" style={{ background: "rgba(255,255,255,0.04)" }}>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Icono</label>
+                  <div className="grid grid-cols-10 gap-1 p-2 rounded-xl mb-2" style={{ background: "var(--bg-faint)" }}>
                     {EMOJI_OPCIONES.map(e => (
                       <button key={e} type="button" onClick={() => setIcono(e)}
                         className="w-8 h-8 flex items-center justify-center rounded-lg text-lg transition-all hover:scale-110"
@@ -233,7 +233,7 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Color</label>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Color</label>
                   <div className="flex flex-wrap gap-1.5">
                     {COLOR_PRESETS.map(c => (
                       <button key={c} type="button" onClick={() => setColor(c)}
@@ -245,14 +245,14 @@ export default function CategoriasClient({ initialCategories }: CategoriasClient
                 </div>
 
                 {/* Preview */}
-                <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "rgba(255,255,255,0.04)" }}>
+                <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "var(--bg-faint)" }}>
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base"
                     style={{ background: `${color}22`, border: `1px solid ${color}44` }}>
                     {icono}
                   </div>
                   <div>
-                    <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.88)" }}>{nombre || "Nombre..."}</p>
-                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>{TIPO_LABELS[tipo]}</p>
+                    <p className="text-sm font-medium" style={{ color: "var(--fg-1)" }}>{nombre || "Nombre..."}</p>
+                    <p className="text-xs" style={{ color: "var(--fg-6)" }}>{TIPO_LABELS[tipo]}</p>
                   </div>
                 </div>
 

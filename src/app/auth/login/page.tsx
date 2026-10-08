@@ -75,24 +75,24 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold gradient-text">Fluxy</h1>
-          <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.5)" }}>Gestión financiera personal</p>
+          <p className="text-sm mt-1" style={{ color: "var(--fg-4)" }}>Gestión financiera personal</p>
         </div>
 
         {/* Card */}
         <div className="glass-card p-8">
-          <h2 className="text-xl font-semibold mb-1" style={{ color: "rgba(255,255,255,0.9)" }}>Bienvenido de vuelta</h2>
-          <p className="text-sm mb-6" style={{ color: "rgba(255,255,255,0.45)" }}>Ingresá a tu cuenta para continuar</p>
+          <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--fg-1)" }}>Bienvenido de vuelta</h2>
+          <p className="text-sm mb-6" style={{ color: "var(--fg-5)" }}>Ingresá a tu cuenta para continuar</p>
 
           {error && (
             <div className="alert-card danger mb-4">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span className="text-sm" style={{ color: "rgba(255,255,255,0.8)" }}>{error}</span>
+              <span className="text-sm" style={{ color: "var(--fg-2)" }}>{error}</span>
             </div>
           )}
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: "rgba(255,255,255,0.65)" }}>Email</label>
+              <label className="block text-sm font-medium mb-2" style={{ color: "var(--fg-3)" }}>Email</label>
               <input
                 type="email"
                 className="input-field"
@@ -104,7 +104,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: "rgba(255,255,255,0.65)" }}>Contraseña</label>
+              <label className="block text-sm font-medium mb-2" style={{ color: "var(--fg-3)" }}>Contraseña</label>
               <input
                 type="password"
                 className="input-field"
@@ -131,9 +131,9 @@ export default function LoginPage() {
           </form>
 
           <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
-            <span className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>o</span>
-            <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+            <div className="flex-1 h-px" style={{ background: "var(--bg-hover)" }} />
+            <span className="text-xs" style={{ color: "var(--fg-6)" }}>o</span>
+            <div className="flex-1 h-px" style={{ background: "var(--bg-hover)" }} />
           </div>
 
           <button
@@ -163,7 +163,7 @@ export default function LoginPage() {
             🚀 Probar con cuenta demo
           </button>
 
-          <p className="text-center text-sm mt-6" style={{ color: "rgba(255,255,255,0.4)" }}>
+          <p className="text-center text-sm mt-6" style={{ color: "var(--fg-5)" }}>
             ¿No tenés cuenta?{" "}
             <Link href="/auth/register" className="font-medium hover:underline" style={{ color: "#6C63FF" }}>
               Registrate gratis

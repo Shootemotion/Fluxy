@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireUser } from "@/lib/api-auth";
 
 // Module-level crumb cache (survives across requests in the same process)
 let crumbCache: { crumb: string; cookie: string; expiresAt: number } | null = null;
@@ -68,6 +69,9 @@ async function fetchChart(ticker: string, cookie: string) {
 }
 
 export async function GET(request: NextRequest) {
+  const unauthorized = await requireUser();
+  if (unauthorized) return unauthorized;
+
   const raw = request.nextUrl.searchParams.get("tickers");
   if (!raw) return NextResponse.json({ error: "No tickers" }, { status: 400 });
 

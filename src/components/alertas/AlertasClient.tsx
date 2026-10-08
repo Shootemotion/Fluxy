@@ -114,7 +114,7 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
     setRules(prev => prev.map(r => r.id === id ? { ...r, activa } : r));
     try {
       await updateAlertRule(id, { activa });
-    } catch (err: any) {
+    } catch {
       toast.error("Error al actualizar la regla");
     }
   }
@@ -128,7 +128,7 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
             setRules(prev => prev.filter(r => r.id !== id));
             await deleteAlertRule(id);
             toast.success("Regla eliminada");
-          } catch (err: any) {
+          } catch {
             toast.error("Error al eliminar la regla");
           }
         },
@@ -141,8 +141,8 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>Alertas</h1>
-          <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--fg-hi)" }}>Alertas</h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--fg-5)" }}>
             Notificaciones y reglas personalizadas
           </p>
         </div>
@@ -162,13 +162,13 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl" style={{ background: "rgba(255,255,255,0.04)" }}>
+      <div className="flex gap-1 p-1 rounded-xl" style={{ background: "var(--bg-faint)" }}>
         {(["notificaciones", "reglas"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className="flex-1 py-2 text-sm font-semibold rounded-lg capitalize transition-all relative"
             style={tab === t
               ? { background: "rgba(108,99,255,0.25)", color: "#A5A0FF" }
-              : { color: "rgba(255,255,255,0.40)" }}>
+              : { color: "var(--fg-5)" }}>
             {t === "notificaciones" ? "Notificaciones" : "Mis Reglas"}
             {t === "notificaciones" && noLeidas > 0 && (
               <span className="absolute top-1 right-2 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center"
@@ -187,7 +187,7 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
             <div className="flex justify-end">
               <button onClick={handleMarkAllRead}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg"
-                style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.45)" }}>
+                style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }}>
                 Marcar todo leído
               </button>
             </div>
@@ -196,9 +196,9 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
           {alertas.length === 0 ? (
             <div className="glass-card p-14 text-center">
               <p className="text-4xl mb-3">🔔</p>
-              <p className="font-medium" style={{ color: "rgba(255,255,255,0.6)" }}>Sin notificaciones</p>
-              <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>
-                Configurá reglas y presioná "Evaluar" para generar alertas
+              <p className="font-medium" style={{ color: "var(--fg-4)" }}>Sin notificaciones</p>
+              <p className="text-sm mt-1" style={{ color: "var(--fg-6)" }}>
+                Configurá reglas y presioná &quot;Evaluar&quot; para generar alertas
               </p>
             </div>
           ) : (
@@ -219,15 +219,15 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
                         <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />
                       )}
                     </div>
-                    <p className="text-sm" style={{ color: "rgba(255,255,255,0.80)" }}>{alerta.mensaje}</p>
-                    <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.28)" }}>
+                    <p className="text-sm" style={{ color: "var(--fg-2)" }}>{alerta.mensaje}</p>
+                    <p className="text-xs mt-1" style={{ color: "var(--fg-6)" }}>
                       {new Date(alerta.created_at).toLocaleDateString("es-AR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </div>
                   {!alerta.leida && (
                     <button onClick={() => handleMarkRead(alerta.id)}
                       className="text-xs flex-shrink-0 px-3 py-1.5 rounded-lg"
-                      style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.45)" }}>
+                      style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }}>
                       ✓
                     </button>
                   )}
@@ -251,8 +251,8 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
           {rules.length === 0 && !showForm && (
             <div className="glass-card p-14 text-center">
               <p className="text-4xl mb-3">⚡</p>
-              <p className="font-medium" style={{ color: "rgba(255,255,255,0.6)" }}>Sin reglas configuradas</p>
-              <p className="text-sm mt-1 max-w-xs mx-auto" style={{ color: "rgba(255,255,255,0.35)" }}>
+              <p className="font-medium" style={{ color: "var(--fg-4)" }}>Sin reglas configuradas</p>
+              <p className="text-sm mt-1 max-w-xs mx-auto" style={{ color: "var(--fg-6)" }}>
                 Creá condiciones automáticas: si el saldo baja de X, si gastás más de Y en una categoría, etc.
               </p>
             </div>
@@ -267,7 +267,7 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
               <div key={rule.id} className="glass-card p-4 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.90)" }}>
+                    <span className="text-sm font-semibold" style={{ color: "var(--fg-1)" }}>
                       {rule.nombre}
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
@@ -276,12 +276,12 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
                     </span>
                     {!rule.activa && (
                       <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
-                        style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.35)" }}>
+                        style={{ background: "var(--bg-hover)", color: "var(--fg-6)" }}>
                         Pausada
                       </span>
                     )}
                   </div>
-                  <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--fg-5)" }}>
                     {typeLabel} {opLabel} {rule.tipo === "objetivo_progreso" ? `${rule.valor}%` : `$${Number(rule.valor).toLocaleString("es-AR")}`}
                     {ref ? ` · ${ref}` : ""}
                   </p>
@@ -290,7 +290,7 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
                   {/* Toggle */}
                   <button onClick={() => handleToggleRule(rule.id, !rule.activa)}
                     className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0 overflow-hidden"
-                    style={{ background: rule.activa ? "rgba(108,99,255,0.6)" : "rgba(255,255,255,0.12)" }}>
+                    style={{ background: rule.activa ? "rgba(108,99,255,0.6)" : "var(--bg-strong)" }}>
                     <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
                       style={{ left: rule.activa ? "22px" : "2px" }} />
                   </button>
@@ -310,10 +310,10 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
           {/* New rule form */}
           {showForm && (
             <div className="glass-card p-5 space-y-4">
-              <h3 className="font-semibold" style={{ color: "rgba(255,255,255,0.90)" }}>Nueva regla</h3>
+              <h3 className="font-semibold" style={{ color: "var(--fg-1)" }}>Nueva regla</h3>
               <form onSubmit={handleCreateRule} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>
                     Nombre de la regla
                   </label>
                   <input className="input-field" placeholder="Ej: Alerta gasto alto en restaurantes"
@@ -322,7 +322,7 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>
                       Tipo de condición
                     </label>
                     <select className="input-field" value={formTipo} onChange={e => { setFormTipo(e.target.value); setFormCuenta(""); setFormCat(""); setFormGoal(""); }}>
@@ -330,7 +330,7 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>
                       Operador
                     </label>
                     <select className="input-field" value={formOp} onChange={e => setFormOp(e.target.value)}>
@@ -340,7 +340,7 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>
+                  <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>
                     {formTipo === "objetivo_progreso" ? "Porcentaje (%)" : "Monto ($)"}
                   </label>
                   <input className="input-field font-mono" type="number" min="0" step="any"
@@ -350,7 +350,7 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
 
                 {selectedType?.needsCuenta && (
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Cuenta</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Cuenta</label>
                     <select className="input-field" value={formCuenta} onChange={e => setFormCuenta(e.target.value)} required>
                       <option value="">Seleccioná una cuenta...</option>
                       {accounts.map((a: any) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
@@ -359,7 +359,7 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
                 )}
                 {selectedType?.needsCat && (
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Categoría</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Categoría</label>
                     <select className="input-field" value={formCat} onChange={e => setFormCat(e.target.value)} required>
                       <option value="">Seleccioná una categoría...</option>
                       {categories.filter((c: any) => c.tipo === "gasto").map((c: any) => (
@@ -370,7 +370,7 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
                 )}
                 {selectedType?.needsGoal && (
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Objetivo</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Objetivo</label>
                     <select className="input-field" value={formGoal} onChange={e => setFormGoal(e.target.value)} required>
                       <option value="">Seleccioná un objetivo...</option>
                       {goals.map((g: any) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
@@ -380,7 +380,7 @@ export default function AlertasClient({ initialAlertas, initialRules, accounts, 
 
                 {/* Preview sentence */}
                 {formValor && (
-                  <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(108,99,255,0.10)", border: "1px solid rgba(108,99,255,0.20)", color: "rgba(255,255,255,0.70)" }}>
+                  <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(108,99,255,0.10)", border: "1px solid rgba(108,99,255,0.20)", color: "var(--fg-3)" }}>
                     🔔 Alertar cuando <strong style={{ color: "#A5A0FF" }}>
                       {RULE_TYPES.find(t => t.value === formTipo)?.label}
                     </strong> {OPERATORS.find(o => o.value === formOp)?.label} <strong style={{ color: "#A5A0FF" }}>

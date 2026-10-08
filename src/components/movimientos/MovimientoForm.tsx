@@ -81,8 +81,8 @@ export default function MovimientoForm({ accounts, categories, goals }: Movimien
     return (
       <div className="glass-card p-12 text-center animate-fade-in">
         <p className="text-4xl mb-4">💳</p>
-        <h2 className="text-xl font-bold mb-4" style={{ color: "rgba(255,255,255,0.9)" }}>Necesitás una cuenta</h2>
-        <p className="text-sm mb-8" style={{ color: "rgba(255,255,255,0.45)" }}>
+        <h2 className="text-xl font-bold mb-4" style={{ color: "var(--fg-1)" }}>Necesitás una cuenta</h2>
+        <p className="text-sm mb-8" style={{ color: "var(--fg-5)" }}>
           Para registrar movimientos primero tenés que crear al menos una cuenta (ej: Efectivo, Banco, Mercado Pago).
         </p>
         <Link href="/app/cuentas" className="btn-primary">Crear mi primera cuenta</Link>
@@ -97,8 +97,8 @@ export default function MovimientoForm({ accounts, categories, goals }: Movimien
           <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(16,185,129,0.15)", border: "2px solid #10B981" }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
-          <p className="text-xl font-bold mb-1" style={{ color: "rgba(255,255,255,0.9)" }}>¡Movimiento registrado!</p>
-          <p className="text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>Actualizando tus finanzas...</p>
+          <p className="text-xl font-bold mb-1" style={{ color: "var(--fg-1)" }}>¡Movimiento registrado!</p>
+          <p className="text-sm" style={{ color: "var(--fg-5)" }}>Actualizando tus finanzas...</p>
         </div>
       </div>
     );
@@ -109,12 +109,12 @@ export default function MovimientoForm({ accounts, categories, goals }: Movimien
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <Link href="/app/movimientos" className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/5 transition-colors" style={{ color: "rgba(255,255,255,0.5)" }}>
+          <Link href="/app/movimientos" className="w-8 h-8 rounded-lg flex items-center justify-center hover: bg-white/5 transition-colors" style={{ color: "var(--fg-4)" }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </Link>
-          <h1 className="text-xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>Nuevo movimiento</h1>
+          <h1 className="text-xl font-bold" style={{ color: "var(--fg-hi)" }}>Nuevo movimiento</h1>
         </div>
-        <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
+        <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: "var(--bd)" }}>
           {(["rapido", "avanzado"] as const).map((m) => (
             <button
               key={m}
@@ -123,7 +123,7 @@ export default function MovimientoForm({ accounts, categories, goals }: Movimien
               className="px-4 py-2 text-sm font-medium transition-all"
               style={{
                 background: modo === m ? "#6C63FF" : "transparent",
-                color: modo === m ? "white" : "rgba(255,255,255,0.5)",
+                color: modo === m ? "white" : "var(--fg-4)",
               }}
             >
               {m === "rapido" ? "⚡" : "🔧"}
@@ -141,9 +141,9 @@ export default function MovimientoForm({ accounts, categories, goals }: Movimien
             onClick={() => setTipo(t.value)}
             className="p-3 rounded-xl text-sm font-medium transition-all flex flex-col items-center gap-1.5"
             style={{
-              background: tipo === t.value ? `${t.color}20` : "rgba(255,255,255,0.04)",
+              background: tipo === t.value ? `${t.color}20` : "var(--bg-faint)",
               border: tipo === t.value ? `1px solid ${t.color}60` : "1px solid transparent",
-              color: tipo === t.value ? t.color : "rgba(255,255,255,0.55)",
+              color: tipo === t.value ? t.color : "var(--fg-4)",
             }}
           >
             <span className="text-xl">{t.icon}</span>

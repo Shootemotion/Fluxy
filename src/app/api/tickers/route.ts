@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireUser } from "@/lib/api-auth";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
@@ -8,6 +9,9 @@ const EXCHANGE_LABELS: Record<string, string> = {
 };
 
 export async function GET(request: NextRequest) {
+  const unauthorized = await requireUser();
+  if (unauthorized) return unauthorized;
+
   const q = request.nextUrl.searchParams.get("q")?.trim();
   if (!q || q.length < 1) return NextResponse.json([]);
 

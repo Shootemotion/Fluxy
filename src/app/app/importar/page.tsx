@@ -1,4 +1,4 @@
-import { getAccounts, getCategories } from "@/lib/actions";
+import { getAccounts, getCategories, getReglasCategorizacion } from "@/lib/actions";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import ImportarClient from "@/components/importar/ImportarClient";
@@ -9,14 +9,15 @@ export default async function ImportarPage() {
 
   if (!user) redirect("/auth/login");
 
-  const [accounts, categories] = await Promise.all([
+  const [accounts, categories, reglas] = await Promise.all([
     getAccounts(),
     getCategories(),
+    getReglasCategorizacion(),
   ]);
 
   return (
     <div className="w-full">
-      <ImportarClient accounts={accounts} categories={categories} />
+      <ImportarClient accounts={accounts} categories={categories} reglas={reglas} />
     </div>
   );
 }

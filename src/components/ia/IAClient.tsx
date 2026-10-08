@@ -32,8 +32,15 @@ function parseNaturalLanguage(text: string, accounts: any[], goals: any[]) {
   let tasa_interes = 0;
   let cuotas = 1;
 
-  // Detect Loans / Credit Card Installments
-  if (lower.includes("prestamo") || lower.includes("préstamo") || lower.includes("crédito") || lower.includes("credito") && !lower.includes("tarjeta")) {
+  // Detect Loans / Credit Card Installments.
+  // The exclusion has to cover every loan keyword: && binds tighter than ||,
+  // so inlining it only guarded the last one and "tarjeta de crédito" was
+  // classified as a loan instead of an installment plan.
+  const mencionaPrestamo =
+    lower.includes("prestamo") || lower.includes("préstamo") ||
+    lower.includes("crédito")  || lower.includes("credito");
+
+  if (mencionaPrestamo && !lower.includes("tarjeta")) {
     tipoAccion = "pasivo";
     tipoLabel = "Préstamo (Pasivo)";
     if (lower.includes("uva")) sistema_amortizacion = "UVA";
@@ -101,7 +108,7 @@ function parseNaturalLanguage(text: string, accounts: any[], goals: any[]) {
   if (lower.includes("vacacion"))   objetivoId = goals.find((o: any) => o.nombre.toLowerCase().includes("vacacion"))?.id  ?? "";
 
   // Clean up description
-  let descripcion = text
+  const descripcion = text
     .replace(/registr[aáa]\s*/i, "").replace(/anot[aáa]\s*/i, "")
     .replace(/sum[aáa]\s*/i, "").replace(/cobr[eé]\s*/i, "")
     .replace(/gast[eé]\s*/i, "").replace(/pas[eé]\s*/i, "")
@@ -242,10 +249,10 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
   return (
     <div className="p-4 lg:p-8 animate-fade-in max-w-2xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-1" style={{ color: "rgba(255,255,255,0.95)" }}>
+        <h1 className="text-2xl font-bold mb-1" style={{ color: "var(--fg-hi)" }}>
           Asistente IA 🤖
         </h1>
-        <p className="text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>
+        <p className="text-sm" style={{ color: "var(--fg-5)" }}>
           Describí tu movimiento en lenguaje natural y yo lo interpreto
         </p>
       </div>
@@ -263,7 +270,7 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
               onKeyDown={e => { if (e.key === "Enter" && e.metaKey) handleParse(); }}
               style={{ fontSize: 16 }}
             />
-            <p className="text-xs mt-2" style={{ color: "rgba(255,255,255,0.25)" }}>⌘+Enter para analizar</p>
+            <p className="text-xs mt-2" style={{ color: "var(--fg-7)" }}>⌘+Enter para analizar</p>
           </div>
 
           <div className="flex gap-3">
@@ -293,7 +300,7 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
           </div>
 
           <div className="glass-card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "rgba(255,255,255,0.35)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--fg-6)" }}>
               Ejemplos que podés probar
             </p>
             <div className="space-y-2">
@@ -302,7 +309,7 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
                   key={i}
                   onClick={() => setTexto(ej)}
                   className="w-full text-left text-sm px-3 py-2 rounded-lg transition-colors"
-                  style={{ color: "rgba(255,255,255,0.65)", background: "rgba(255,255,255,0.04)" }}
+                  style={{ color: "var(--fg-3)", background: "var(--bg-faint)" }}
                 >
                   <span style={{ color: "#6C63FF" }}>→</span> &ldquo;{ej}&rdquo;
                 </button>
@@ -319,26 +326,26 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
           <div className="glass-card p-5" style={{ borderLeft: "3px solid #6C63FF" }}>
             <div className="flex items-center gap-2 mb-3">
               <span className="text-xl">🤖</span>
-              <p className="font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>Interpreté esto:</p>
+              <p className="font-semibold" style={{ color: "var(--fg-1)" }}>Interpreté esto:</p>
               <span className="badge badge-primary text-xs ml-auto">
                 Confianza {parsed?.confianza}%
               </span>
             </div>
-            <p className="text-sm italic" style={{ color: "rgba(255,255,255,0.5)" }}>
+            <p className="text-sm italic" style={{ color: "var(--fg-4)" }}>
               &ldquo;{texto}&rdquo;
             </p>
           </div>
 
           {/* Campos editables */}
           <div className="glass-card p-5 space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.35)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--fg-6)" }}>
               Vista previa — editá antes de confirmar
             </p>
 
             <div className="grid grid-cols-2 gap-4">
               {editado.tipoAccion === "movimiento" && (
                 <div>
-                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Tipo</label>
+                  <label className="text-xs block mb-1.5" style={{ color: "var(--fg-5)" }}>Tipo</label>
                   <select
                     className="input-field text-sm"
                     value={editado.tipo}
@@ -354,7 +361,7 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
               )}
               {editado.tipoAccion === "pasivo" && (
                 <div>
-                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Sistema</label>
+                  <label className="text-xs block mb-1.5" style={{ color: "var(--fg-5)" }}>Sistema</label>
                   <select
                     className="input-field text-sm"
                     value={editado.sistema_amortizacion}
@@ -369,12 +376,12 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
               )}
               {editado.tipoAccion === "recurrente" && (
                 <div>
-                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Tipo</label>
+                  <label className="text-xs block mb-1.5" style={{ color: "var(--fg-5)" }}>Tipo</label>
                   <input className="input-field text-sm opacity-50" disabled value="Gasto Recurrente / Cuotas" />
                 </div>
               )}
               <div>
-                <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Monto</label>
+                <label className="text-xs block mb-1.5" style={{ color: "var(--fg-5)" }}>Monto</label>
                 <div className="flex gap-1">
                   <select
                     className="input-field text-sm"
@@ -395,7 +402,7 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
                 </div>
               </div>
               <div>
-                <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Fecha</label>
+                <label className="text-xs block mb-1.5" style={{ color: "var(--fg-5)" }}>Fecha</label>
                 <input
                   type="date"
                   className="input-field text-sm"
@@ -405,7 +412,7 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
               </div>
               {(editado.tipoAccion === "movimiento" || editado.tipoAccion === "recurrente") && (
                 <div>
-                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Categoría</label>
+                  <label className="text-xs block mb-1.5" style={{ color: "var(--fg-5)" }}>Categoría</label>
                   <select
                     className="input-field text-sm"
                     value={editado.categoriaId}
@@ -421,7 +428,7 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
               
               {(editado.tipoAccion === "pasivo" || editado.tipoAccion === "recurrente") && (
                 <div>
-                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Cuotas</label>
+                  <label className="text-xs block mb-1.5" style={{ color: "var(--fg-5)" }}>Cuotas</label>
                   <input
                     type="number"
                     className="input-field text-sm"
@@ -433,7 +440,7 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
               
               {editado.tipoAccion === "pasivo" && (
                 <div>
-                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Tasa Anual (%)</label>
+                  <label className="text-xs block mb-1.5" style={{ color: "var(--fg-5)" }}>Tasa Anual (%)</label>
                   <input
                     type="number"
                     className="input-field text-sm"
@@ -444,7 +451,7 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
               )}
               
               <div className="col-span-2">
-                <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Descripción</label>
+                <label className="text-xs block mb-1.5" style={{ color: "var(--fg-5)" }}>Descripción</label>
                 <input
                   type="text"
                   className="input-field text-sm"
@@ -453,7 +460,7 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
                 />
               </div>
               <div>
-                <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Cuenta</label>
+                <label className="text-xs block mb-1.5" style={{ color: "var(--fg-5)" }}>Cuenta</label>
                 <select
                   className="input-field text-sm"
                   value={editado.cuentaId}
@@ -467,7 +474,7 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
               </div>
               {(editado.tipo === "aporte_objetivo" || editado.objetivoId) && goals.length > 0 && (
                 <div>
-                  <label className="text-xs block mb-1.5" style={{ color: "rgba(255,255,255,0.4)" }}>Objetivo</label>
+                  <label className="text-xs block mb-1.5" style={{ color: "var(--fg-5)" }}>Objetivo</label>
                   <select
                     className="input-field text-sm"
                     value={editado.objetivoId}
@@ -489,11 +496,11 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
               className="glass-card p-4 text-center"
               style={{ background: "rgba(108,99,255,0.08)", borderColor: "rgba(108,99,255,0.2)" }}
             >
-              <p className="text-xs mb-1" style={{ color: "rgba(255,255,255,0.45)" }}>{editado.tipoLabel}</p>
+              <p className="text-xs mb-1" style={{ color: "var(--fg-5)" }}>{editado.tipoLabel}</p>
               <p className="text-4xl font-bold" style={{ color: editado.tipo === "ingreso" ? "#10B981" : "#EF4444" }}>
                 {formatCurrency(editado.monto, editado.moneda)}
               </p>
-              <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.5)" }}>
+              <p className="text-sm mt-1" style={{ color: "var(--fg-4)" }}>
                 {editado.descripcion} 
                 {editado.tipoAccion === "pasivo" && ` - ${editado.cuotas} cuotas al ${editado.tasa_interes}%`}
                 {editado.tipoAccion === "recurrente" && ` - ${editado.cuotas} cuotas`}
@@ -531,8 +538,8 @@ export default function IAClient({ accounts, goals, categories }: IAClientProps)
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </div>
-          <p className="text-2xl font-bold mb-2" style={{ color: "rgba(255,255,255,0.9)" }}>¡Guardado!</p>
-          <p className="text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>El movimiento fue registrado correctamente</p>
+          <p className="text-2xl font-bold mb-2" style={{ color: "var(--fg-1)" }}>¡Guardado!</p>
+          <p className="text-sm" style={{ color: "var(--fg-5)" }}>El movimiento fue registrado correctamente</p>
         </div>
       )}
     </div>

@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/api-auth";
 
 // Cache for 1 hour
-let tcCache: { blue: number; mep: number; official: number; fecha: string; expiresAt: number } | null = null;
+let tcCache: { blue: number; mep: number; oficial: number; fecha: string; expiresAt: number } | null = null;
 
 export async function GET() {
+  const unauthorized = await requireUser();
+  if (unauthorized) return unauthorized;
+
   if (tcCache && tcCache.expiresAt > Date.now()) {
     return NextResponse.json(tcCache);
   }
@@ -27,16 +31,22 @@ export async function GET() {
     tcCache = {
       blue,
       mep,
-      official: oficial,
+      oficial,
       fecha,
       expiresAt: Date.now() + 60 * 60 * 1000,
     };
 
     return NextResponse.json(tcCache);
-  } catch (err) {
+  } catch {
+    // A stale rate is still a real rate; invented numbers are not. Serving
+    // hardcoded values with a 200 silently corrupts every USD conversion in
+    // the app, so fail loudly and let the UI say the rate is unavailable.
+    if (tcCache) {
+      return NextResponse.json({ ...tcCache, stale: true });
+    }
     return NextResponse.json(
-      { blue: 1250, mep: 1200, official: 950, error: "Using fallback TC" },
-      { status: 200 } // Return 200 with fallbacks to avoid breaking the UI
+      { error: "No se pudo obtener la cotización del dólar." },
+      { status: 502 }
     );
   }
 }

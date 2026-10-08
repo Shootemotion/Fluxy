@@ -3,9 +3,9 @@
 import { useState, useCallback, useMemo } from "react";
 import { useDropzone } from "react-dropzone";
 import Papa from "papaparse";
-import * as XLSX from "xlsx";
 import { toast } from "sonner";
-import { getMovementsForDeduplication, createMovementsBulk, uploadImportFile, createCategory, createRecurrente } from "@/lib/actions";
+import { getMovementsForDeduplication, createMovementsBulk, uploadImportFile, createCategory, createRecurrente, aprenderCategoria, olvidarReglaCategorizacion } from "@/lib/actions";
+import { inferirCategoria, mismoNombre, sinAcentos, clavePatron, CATEGORIA_FALLBACK } from "@/lib/categorizacion";
 
 const PASOS = ["Subir archivo", "Mapear columnas", "Preview", "Importar"];
 
@@ -25,9 +25,63 @@ const COLUMNS_SISTEMA = [
   { value: "ignorar",           label: "— Ignorar columna —" },
 ];
 
+/**
+ * Interpreta un importe de resumen bancario.
+ *
+ * El signo puede venir adelante, entre paréntesis, o detrás: los resúmenes
+ * argentinos usan el sufijo ("7.863,79-") para devoluciones.
+ */
+function parseMonto(val: any): number {
+  if (val == null || String(val).trim() === "" || String(val).trim() === "-") return NaN;
+  let str = String(val).trim();
+  const isNeg = str.startsWith("-") || str.startsWith("(") || str.endsWith("-");
+  str = str.replace(/-\s*$/, "").replace(/[()$€\s]/g, "");
+  // Distingue el separador de miles del decimal: 10.118,69 vs 10,118.69
+  const lastDot = str.lastIndexOf(".");
+  const lastComma = str.lastIndexOf(",");
+  str = lastComma > lastDot
+    ? str.replace(/\./g, "").replace(",", ".")
+    : str.replace(/,/g, "");
+  const n = parseFloat(str);
+  return isNeg ? -Math.abs(n) : n;
+}
+
+/** Normaliza cualquier fecha a YYYY-MM-DD. */
+function parseDate(val: any): string {
+  if (!val) return "";
+  const str = String(val).trim();
+  // Número de serie de Excel
+  if (/^\d{5}$/.test(str)) {
+    const d = new Date(Math.round((parseInt(str) - 25569) * 86400 * 1000));
+    return d.toISOString().split("T")[0];
+  }
+  const m1 = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/); // DD/MM/YYYY
+  if (m1) return `${m1[3]}-${m1[2].padStart(2, "0")}-${m1[1].padStart(2, "0")}`;
+  const m2 = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/); // YYYY-MM-DD
+  if (m2) return `${m2[1]}-${m2[2].padStart(2, "0")}-${m2[3].padStart(2, "0")}`;
+  const m3 = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/); // DD/MM/YY
+  if (m3) {
+    const yy = parseInt(m3[3]) > 50 ? `19${m3[3]}` : `20${m3[3]}`;
+    return `${yy}-${m3[2].padStart(2, "0")}-${m3[1].padStart(2, "0")}`;
+  }
+  return str;
+}
+
+/** Columnas de la vista previa del mapeo, en el orden en que se muestran. */
+const PREVIEW_COLUMNS = [
+  { campo: "fecha",       label: "Fecha",       requerida: true,  mono: true  },
+  { campo: "descripcion", label: "Descripción", requerida: true,  mono: false },
+  { campo: "monto",       label: "Monto",       requerida: true,  mono: true  },
+  { campo: "moneda",      label: "Moneda",      requerida: false, mono: false },
+  { campo: "cuotas",      label: "Cuotas",      requerida: false, mono: true  },
+  { campo: "referencia",  label: "Referencia",  requerida: false, mono: true  },
+] as const;
+
 interface ImportarClientProps {
   accounts: any[];
   categories: any[];
+  /** Correcciones que el usuario ya hizo antes; ver aprenderCategoria. */
+  reglas?: any[];
 }
 
 interface ParsedRow {
@@ -55,7 +109,7 @@ interface ProcessedRow {
   originalData?: any;
 }
 
-export default function ImportarClient({ accounts, categories }: ImportarClientProps) {
+export default function ImportarClient({ accounts, categories, reglas = [] }: ImportarClientProps) {
   const [paso, setPaso] = useState(0);
   const [archivo, setArchivo] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -81,26 +135,119 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
   const [tipoResumen, setTipoResumen] = useState<"cuenta" | "tarjeta" | null>(null);
   const [fechaCierre, setFechaCierre] = useState("");
 
-  // Find category by name heuristically
-  function guessCategory(desc: string) {
-    const lower = desc.toLowerCase();
-    let catName = "Otros";
-    if (lower.includes("super") || lower.includes("mercado") || lower.includes("carrefour") || lower.includes("coto") || lower.includes("jumbo") || lower.includes("dia ")) catName = "Alimentación";
-    else if (lower.includes("uber") || lower.includes("cabify") || lower.includes("taxi") || lower.includes("nafta") || lower.includes("ypf") || lower.includes("shell") || lower.includes("axion")) catName = "Transporte";
-    else if (lower.includes("farmacia") || lower.includes("medic") || lower.includes("salud") || lower.includes("obra social")) catName = "Salud";
-    else if (lower.includes("netflix") || lower.includes("spotify") || lower.includes("youtube") || lower.includes("suscrip") || lower.includes("cine") || lower.includes("steam")) catName = "Ocio";
-    else if (lower.includes("sueldo") || lower.includes("haberes") || lower.includes("honorarios") || lower.includes("aguinaldo")) catName = "Sueldo";
-    else if (lower.includes("alquiler") || lower.includes("expensa") || lower.includes("servicios") || lower.includes("luz") || lower.includes("agua") || lower.includes("gas") || lower.includes("internet")) catName = "Vivienda";
-    else if (lower.includes("seguro") || lower.includes("patente")) catName = "Impuestos y Seguros";
-    else if (lower.match(/cuota\s*\d+\/\d+/i) || lower.match(/c\s*\d+\/\d+/i) || lower.match(/\d{2}\/\d{2}/) || lower.includes("tarjeta")) catName = "Tarjetas";
-    
-    // Si no encuentra la exacta, busca que la contenga
-    let cat = localCategories.find((c: any) => c.nombre.toLowerCase() === catName.toLowerCase());
-    if (!cat) cat = localCategories.find((c: any) => c.nombre.toLowerCase().includes(catName.toLowerCase()));
-    // Fallback genérico para gastos e ingresos
-    if (!cat) cat = localCategories.find((c: any) => c.nombre.toLowerCase() === "varios" || c.nombre.toLowerCase() === "otros");
+  // Correcciones que el usuario ya hizo antes, indexadas por patrón. Empieza
+  // con lo que trajo el servidor y se va llenando con lo que corrija acá.
+  const [reglasAprendidas, setReglasAprendidas] = useState<Map<string, string>>(
+    () => new Map<string, string>((reglas || []).map((r: any) => [r.patron, r.categoria_id]))
+  );
+  const [reglasGuardadas, setReglasGuardadas] = useState<any[]>(reglas || []);
+  const [mostrarReglas, setMostrarReglas] = useState(false);
 
-    return { id: cat?.id || null, nombre: cat?.nombre || catName };
+  async function olvidarRegla(regla: any) {
+    setReglasGuardadas(prev => prev.filter(r => r.id !== regla.id));
+    setReglasAprendidas(prev => {
+      const next = new Map(prev);
+      next.delete(regla.patron);
+      return next;
+    });
+    try {
+      await olvidarReglaCategorizacion(regla.id);
+    } catch {
+      toast.error("No se pudo olvidar la regla");
+      setReglasGuardadas(prev => [...prev, regla]);
+      setReglasAprendidas(prev => new Map(prev).set(regla.patron, regla.categoria_id));
+    }
+  }
+
+  // Campos obligatorios que todavía no están asignados a ninguna columna.
+  const mapeoFaltante = useMemo(() => {
+    const asignados = new Set(Object.values(mapeo));
+    const falta: string[] = [];
+    if (!asignados.has("fecha")) falta.push("Fecha");
+    if (!asignados.has("descripcion")) falta.push("Descripción");
+    if (!asignados.has("monto") && !asignados.has("monto_total") && !asignados.has("monto_restante")) {
+      falta.push("Monto");
+    }
+    return falta;
+  }, [mapeo]);
+
+  /**
+   * Primeras filas leídas con el mapeo elegido, para poder verlo antes de
+   * avanzar. Usa los mismos parsers que la importación real, así que si acá
+   * una fecha sale mal o un monto se corta, va a salir igual de mal después.
+   */
+  const previewMapeo = useMemo(() => {
+    const col = (destino: string) => Object.keys(mapeo).find(k => mapeo[k] === destino);
+    const cFecha = col("fecha");
+    const cDesc = col("descripcion");
+    const cMonto = col("monto") ?? col("monto_total") ?? col("monto_restante");
+    const cMoneda = col("moneda");
+    const cCuotas = col("cuotas");
+    const cCuotasTot = col("cuotas_totales");
+    const cRef = col("referencia");
+
+    const fmt = (n: number) =>
+      isNaN(n) ? "" : n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    return rawRows.slice(0, 5).map(r => {
+      const cuotasRaw = cCuotas ? String(r[cCuotas] ?? "").trim() : "";
+      const totalesRaw = cCuotasTot ? String(r[cCuotasTot] ?? "").trim() : "";
+      return {
+        fecha: cFecha ? parseDate(r[cFecha]) : "",
+        descripcion: cDesc ? String(r[cDesc] ?? "").trim() : "",
+        monto: cMonto ? fmt(parseMonto(r[cMonto])) : "",
+        moneda: cMoneda ? String(r[cMoneda] ?? "").trim().toUpperCase() : monedaDefault,
+        cuotas: cuotasRaw || (totalesRaw ? `de ${totalesRaw}` : ""),
+        referencia: cRef ? String(r[cRef] ?? "").trim() : "",
+      } as Record<string, string>;
+    });
+  }, [rawRows, mapeo, monedaDefault]);
+
+  /**
+   * Guarda una corrección hecha a mano en el preview. Es best-effort: si el
+   * guardado falla, la fila ya quedó con la categoría correcta igual, así que
+   * no tiene sentido interrumpir la importación por esto.
+   */
+  function recordarCorreccion(descripcion: string, categoriaId: string) {
+    const patron = clavePatron(descripcion || "");
+    if (!patron || !categoriaId) return;
+
+    setReglasAprendidas(prev => new Map(prev).set(patron, categoriaId));
+    aprenderCategoria(patron, categoriaId).catch(() => {});
+  }
+
+  /**
+   * Resuelve la categoría de un consumo contra las categorías del usuario.
+   *
+   * Primero manda lo que el usuario ya corrigió alguna vez: si dijo que
+   * "SAGOSA" es Hogar, ninguna heurística tiene derecho a contradecirlo.
+   * Recién después entra el diccionario de @/lib/categorizacion.
+   *
+   * Cuando no se pudo inferir nada devuelve id null a propósito, en vez de
+   * empujarlo a "Otros": un movimiento sin categoría aparece después en
+   * /app/pulir, mientras que uno con categoría "Otros" queda escondido ahí
+   * para siempre. No saber y decir "Otros" no es lo mismo.
+   */
+  function guessCategory(desc: string) {
+    const aprendida = reglasAprendidas.get(clavePatron(desc));
+    if (aprendida) {
+      const cat = localCategories.find((c: any) => c.id === aprendida);
+      // Si la categoría fue borrada después de aprender la regla, se ignora.
+      if (cat) return { id: cat.id as string, nombre: cat.nombre as string };
+    }
+
+    const catName = inferirCategoria(desc);
+    if (catName === CATEGORIA_FALLBACK) {
+      return { id: null as string | null, nombre: "" };
+    }
+
+    const cat =
+      localCategories.find((c: any) => mismoNombre(c.nombre, catName)) ??
+      localCategories.find((c: any) => sinAcentos(c.nombre).includes(sinAcentos(catName)));
+
+    // Si la categoría inferida todavía no existe en la cuenta, el nombre viaja
+    // igual para que la fila ofrezca crearla de un click.
+    return { id: (cat?.id as string | undefined) ?? null, nombre: cat?.nombre ?? catName };
   }
 
   // Auto map columns heuristically
@@ -221,16 +368,23 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
           }
         });
       } else if (file.name.endsWith('.xlsx')) {
-        const workbook = XLSX.read(data, { type: 'binary' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet) as ParsedRow[];
-        if (jsonData.length > 0) {
-          const headers = Object.keys(jsonData[0]);
-          setRawHeaders(headers);
-          setRawRows(jsonData);
-          autoMapColumns(headers, jsonData[0]);
-          setPaso(1);
-        }
+        // xlsx is ~130 kB — load it only when an .xlsx is actually dropped,
+        // so opening the page (or importing a CSV) doesn't pay for it.
+        import("xlsx").then(XLSX => {
+          const workbook = XLSX.read(data, { type: 'binary' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet) as ParsedRow[];
+          if (jsonData.length > 0) {
+            const headers = Object.keys(jsonData[0]);
+            setRawHeaders(headers);
+            setRawRows(jsonData);
+            autoMapColumns(headers, jsonData[0]);
+            setPaso(1);
+          }
+        }).catch(err => {
+          console.error("No se pudo cargar el lector de Excel:", err);
+          toast.error("No se pudo leer el archivo Excel");
+        });
       } else {
         toast.error("Formato no soportado. Usá .csv o .xlsx");
       }
@@ -238,7 +392,9 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
 
     if (file.name.endsWith('.csv')) reader.readAsText(file);
     else reader.readAsBinaryString(file);
-  }, []);
+    // Must depend on the guard's inputs: with an empty array this closure kept
+    // the mount-time values (tipoResumen === null), so the check never fired.
+  }, [tipoResumen, fechaCierre]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -256,7 +412,6 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
     const colCuotasTotales   = Object.keys(mapeo).find(k => mapeo[k] === "cuotas_totales");
     const colCuotasPend      = Object.keys(mapeo).find(k => mapeo[k] === "cuotas_pendientes");
     const colMoneda          = Object.keys(mapeo).find(k => mapeo[k] === "moneda");
-    const colRef             = Object.keys(mapeo).find(k => mapeo[k] === "referencia");
 
     if (!colFecha || !colDesc || (!colMonto && !colMontoTotal && !colMontoRestante)) {
       toast.error("Necesitás mapear Fecha, Descripción y al menos un Monto.");
@@ -264,49 +419,6 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
     }
 
     // Robust number parser: handles "10.118,69" (ES) and "10,118.69" (EN) and negatives
-    const parseMonto = (val: any): number => {
-      if (val == null || String(val).trim() === "" || String(val).trim() === "-") return NaN;
-      let str = String(val).trim();
-      const isNeg = str.startsWith("-") || str.startsWith("(");
-      str = str.replace(/[()$€\s]/g, "");
-      // Detect thousands sep vs decimal sep
-      const lastDot   = str.lastIndexOf(".");
-      const lastComma = str.lastIndexOf(",");
-      if (lastComma > lastDot) {
-        // Format: 10.118,69 → ES style
-        str = str.replace(/\./g, "").replace(",", ".");
-      } else {
-        // Format: 10,118.69 → EN style, or plain number
-        str = str.replace(/,/g, "");
-      }
-      const n = parseFloat(str);
-      return isNeg ? -Math.abs(n) : n;
-    };
-
-    // Robust date parser → always returns YYYY-MM-DD or ""
-    const parseDate = (val: any): string => {
-      if (!val) return "";
-      let str = String(val).trim();
-      // Excel serial number
-      if (/^\d{5}$/.test(str)) {
-        const d = new Date(Math.round((parseInt(str) - 25569) * 86400 * 1000));
-        return d.toISOString().split("T")[0];
-      }
-      // DD/MM/YYYY or DD-MM-YYYY
-      const m1 = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-      if (m1) return `${m1[3]}-${m1[2].padStart(2,"0")}-${m1[1].padStart(2,"0")}`;
-      // YYYY/MM/DD or YYYY-MM-DD
-      const m2 = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
-      if (m2) return `${m2[1]}-${m2[2].padStart(2,"0")}-${m2[3].padStart(2,"0")}`;
-      // MM/DD/YYYY fallback (ambiguous, try if day > 12)
-      const m3 = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
-      if (m3) {
-        const yy = parseInt(m3[3]) > 50 ? `19${m3[3]}` : `20${m3[3]}`;
-        return `${yy}-${m3[2].padStart(2,"0")}-${m3[1].padStart(2,"0")}`;
-      }
-      return str; // already ISO or unknown
-    };
-
     const rows: ProcessedRow[] = [];
 
     for (const r of rawRows) {
@@ -431,15 +543,29 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
       }
 
       // ── Tipo (ingreso / gasto) ────────────────────────────────────────
+      // Un importe negativo es una devolución o una nota de crédito. Los
+      // resúmenes las traen con el signo pegado al final ("7.863,79-") y más
+      // abajo el monto se toma en valor absoluto, así que el signo hay que
+      // leerlo acá o se pierde y la devolución se importa como un consumo.
+      const hasNeg = [rawMonto, rawMontoTotal, rawMontoRest].some(v => {
+        if (v == null) return false;
+        const s = String(v).trim();
+        return s.startsWith("-") || s.startsWith("(") || s.endsWith("-");
+      });
+
       let tipo: "ingreso" | "gasto";
-      if (tipoDefault !== "auto") {
+      if (hasNeg) {
+        // El signo del archivo gana incluso sobre el tipo forzado a mano: ese
+        // menú resuelve las filas ambiguas, no invierte un signo explícito.
+        // En una tarjeta todo suma deuda salvo las devoluciones, que la bajan;
+        // en una cuenta bancaria un importe negativo es plata que sale.
+        tipo = tipoResumen === "tarjeta" ? "ingreso" : "gasto";
+      } else if (tipoDefault !== "auto") {
         tipo = tipoDefault;
       } else if (tipoResumen === "tarjeta") {
-        tipo = "gasto"; // los resumenes de tarjeta siempre son gastos
+        tipo = "gasto";
       } else {
-        const hasNeg = [rawMonto, rawMontoTotal, rawMontoRest]
-          .some(v => v != null && String(v).trim().startsWith("-"));
-        tipo = hasNeg ? "gasto" : "ingreso";
+        tipo = "ingreso";
       }
 
       // ── Moneda ────────────────────────────────────────────────────────
@@ -647,7 +773,11 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
       const newRows = [...processedRows];
       newRows[creatingCategoryRow].categoria_id = newCat.id;
       setProcessedRows(newRows);
-      
+
+      // Crear una categoría para este comercio es la corrección más explícita
+      // que existe, así que también se recuerda.
+      recordarCorreccion(row.descripcion, newCat.id);
+
       setCreatingCategoryRow(null);
       setNewCatName("");
       setNewCatIcon("🛒");
@@ -668,8 +798,8 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
   return (
     <div className="p-4 lg:p-8 animate-fade-in max-w-4xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>Importar datos</h1>
-        <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>Importá tu resumen bancario o de billeteras en CSV o Excel</p>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--fg-hi)" }}>Importar datos</h1>
+        <p className="text-sm mt-0.5" style={{ color: "var(--fg-5)" }}>Importá tu resumen bancario o de billeteras en CSV o Excel</p>
       </div>
 
       {/* Steps */}
@@ -679,14 +809,14 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
             <div className="flex items-center gap-2">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${i === paso ? "text-white" : i < paso ? "text-white" : ""}`}
                 style={{
-                  background: i === paso ? "#6C63FF" : i < paso ? "#10B981" : "rgba(255,255,255,0.08)",
-                  color: i > paso ? "rgba(255,255,255,0.4)" : undefined,
+                  background: i === paso ? "#6C63FF" : i < paso ? "#10B981" : "var(--bg-hover)",
+                  color: i > paso ? "var(--fg-5)" : undefined,
                 }}>
                 {i < paso ? "✓" : i + 1}
               </div>
-              <span className="text-sm" style={{ color: i === paso ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)" }}>{p}</span>
+              <span className="text-sm" style={{ color: i === paso ? "var(--fg-1)" : "var(--fg-5)" }}>{p}</span>
             </div>
-            {i < PASOS.length - 1 && <div className="w-8 h-px" style={{ background: "rgba(255,255,255,0.1)" }} />}
+            {i < PASOS.length - 1 && <div className="w-8 h-px" style={{ background: "var(--bg-strong)" }} />}
           </div>
         ))}
       </div>
@@ -698,7 +828,7 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
           {/* A: Elegir tipo de resumen */}
           {!tipoResumen ? (
             <div>
-              <p className="text-sm font-semibold mb-4" style={{ color: "rgba(255,255,255,0.70)" }}>
+              <p className="text-sm font-semibold mb-4" style={{ color: "var(--fg-3)" }}>
                 ¿Qué tipo de archivo vas a importar?
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -725,10 +855,10 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                     }
                   }}
                     className="glass-card p-5 text-left transition-all hover:border-purple-500/40"
-                    style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+                    style={{ border: "1px solid var(--bd)" }}>
                     <div className="text-3xl mb-3">{opt.icon}</div>
-                    <p className="font-semibold text-sm mb-1" style={{ color: "rgba(255,255,255,0.90)" }}>{opt.title}</p>
-                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.40)" }}>{opt.desc}</p>
+                    <p className="font-semibold text-sm mb-1" style={{ color: "var(--fg-1)" }}>{opt.title}</p>
+                    <p className="text-xs" style={{ color: "var(--fg-5)" }}>{opt.desc}</p>
                   </button>
                 ))}
               </div>
@@ -738,11 +868,11 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
               {/* Indicador tipo seleccionado + cambiar */}
               <div className="flex items-center gap-3">
                 <span className="text-lg">{tipoResumen === "tarjeta" ? "💳" : "🏦"}</span>
-                <p className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.80)" }}>
+                <p className="text-sm font-semibold" style={{ color: "var(--fg-2)" }}>
                   {tipoResumen === "tarjeta" ? "Resumen de tarjeta de crédito" : "Resumen de cuenta"}
                 </p>
                 <button onClick={() => { setTipoResumen(null); setFechaCierre(""); }}
-                  className="text-xs px-2 py-0.5 rounded-lg ml-auto" style={{ background: "rgba(255,255,255,0.06)", color: "var(--fg-5)" }}>
+                  className="text-xs px-2 py-0.5 rounded-lg ml-auto" style={{ background: "var(--bg-hover)", color: "var(--fg-5)" }}>
                   Cambiar
                 </button>
               </div>
@@ -753,19 +883,19 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                   <p className="text-xs font-semibold uppercase" style={{ color: "#A5A0FF" }}>Datos del resumen</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "rgba(255,255,255,0.40)" }}>
+                      <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "var(--fg-5)" }}>
                         Fecha de cierre *
                       </label>
                       <input type="date" className="input-field" value={fechaCierre}
                         onChange={e => setFechaCierre(e.target.value)} required />
-                      <p className="text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.30)" }}>
+                      <p className="text-[10px] mt-1" style={{ color: "var(--fg-6)" }}>
                         Es la fecha en que cerró el período del resumen. Se usa para calcular qué cuota es la actual y cuáles ya se pagaron.
                       </p>
                     </div>
                     <div className="rounded-xl p-3 text-xs space-y-1.5" style={{ background: "rgba(108,99,255,0.06)", border: "1px solid rgba(108,99,255,0.15)" }}>
                       <p className="font-semibold" style={{ color: "#A5A0FF" }}>¿Cómo funciona?</p>
-                      <p style={{ color: "rgba(255,255,255,0.45)" }}>
-                        · La "Fecha" del archivo = fecha de compra<br/>
+                      <p style={{ color: "var(--fg-5)" }}>
+                        · La &quot;Fecha&quot; del archivo = fecha de compra<br/>
                         · Se calcula qué cuota corresponde al cierre<br/>
                         · Las compras ya totalmente pagas se omiten<br/>
                         · Se crea un periódico solo para cuotas futuras
@@ -780,22 +910,71 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                 {...getRootProps()}
                 className="glass-card p-10 text-center cursor-pointer transition-all"
                 style={{
-                  border: isDragActive ? "2px dashed #6C63FF" : "2px dashed rgba(255,255,255,0.10)",
+                  border: isDragActive ? "2px dashed #6C63FF" : "2px dashed var(--bd)",
                   background: isDragActive ? "rgba(108,99,255,0.05)" : undefined,
                 }}
               >
                 <input {...getInputProps()} />
                 <div className="text-4xl mb-3">{isDragActive ? "📂" : "📥"}</div>
-                <p className="font-semibold mb-1" style={{ color: "rgba(255,255,255,0.85)" }}>
+                <p className="font-semibold mb-1" style={{ color: "var(--fg-2)" }}>
                   {isDragActive ? "Soltá el archivo aquí" : "Arrastrá tu archivo o hacé click"}
                 </p>
-                <p className="text-xs mb-3" style={{ color: "rgba(255,255,255,0.35)" }}>
+                <p className="text-xs mb-3" style={{ color: "var(--fg-6)" }}>
                   {tipoResumen === "tarjeta" && !fechaCierre
                     ? "⚠️ Ingresá la fecha de cierre antes de subir el archivo"
                     : "Formatos aceptados: .xlsx · .csv"}
                 </p>
                 <span className="badge badge-muted text-xs">.xlsx · .csv</span>
               </div>
+
+              {/* Lo que Fluxy aprendió de correcciones anteriores */}
+              {reglasGuardadas.length > 0 && (
+                <div className="glass-card p-4">
+                  <button
+                    type="button"
+                    onClick={() => setMostrarReglas(v => !v)}
+                    className="flex items-center justify-between w-full text-left"
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--fg-5)" }}>
+                      🧠 {reglasGuardadas.length} {reglasGuardadas.length === 1 ? "comercio aprendido" : "comercios aprendidos"}
+                    </span>
+                    <span className="text-xs" style={{ color: "var(--fg-6)" }}>
+                      {mostrarReglas ? "Ocultar" : "Ver"}
+                    </span>
+                  </button>
+
+                  {mostrarReglas && (
+                    <div className="mt-3 space-y-1.5">
+                      <p className="text-[10px] mb-2" style={{ color: "var(--fg-6)" }}>
+                        Cada vez que corregís una categoría, Fluxy se la guarda y la aplica sola en la próxima importación.
+                      </p>
+                      {reglasGuardadas.map((r: any) => (
+                        <div
+                          key={r.id}
+                          className="flex items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-xs"
+                          style={{ background: "var(--bg-faint)" }}
+                        >
+                          <span className="font-mono truncate" style={{ color: "var(--fg-3)" }}>{r.patron}</span>
+                          <span className="flex items-center gap-2 flex-shrink-0">
+                            <span style={{ color: "var(--fg-4)" }}>
+                              {r.categorias?.icono} {r.categorias?.nombre ?? "—"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => olvidarRegla(r)}
+                              title="Olvidar esta regla"
+                              className="px-1.5 rounded hover:opacity-100 opacity-60"
+                              style={{ color: "var(--danger)" }}
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -808,13 +987,13 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
             <div className="flex items-center gap-3">
               <span className="text-2xl">📄</span>
               <div>
-                <p className="font-medium text-sm" style={{ color: "rgba(255,255,255,0.9)" }}>{archivo.name}</p>
-                <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{(archivo.size / 1024).toFixed(1)} KB · {rawRows.length} filas detectadas</p>
+                <p className="font-medium text-sm" style={{ color: "var(--fg-1)" }}>{archivo.name}</p>
+                <p className="text-xs" style={{ color: "var(--fg-5)" }}>{(archivo.size / 1024).toFixed(1)} KB · {rawRows.length} filas detectadas</p>
               </div>
             </div>
             
             <div className="flex flex-col items-end">
-              <label className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.35)" }}>Cuenta Destino</label>
+              <label className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--fg-6)" }}>Cuenta Destino</label>
               <select className="input-field text-sm w-48 bg-[#1A1A24] text-white" value={cuentaId} onChange={e => setCuentaId(e.target.value)}>
                 {accounts.map(a => <option key={a.id} value={a.id} className="bg-[#1A1A24]">{a.nombre}</option>)}
               </select>
@@ -824,7 +1003,7 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
           {/* Global defaults */}
           <div className="glass-card p-4 flex flex-wrap gap-4 items-end">
             <div>
-              <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "rgba(255,255,255,0.35)" }}>Moneda por defecto</label>
+              <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "var(--fg-6)" }}>Moneda por defecto</label>
               <select className="input-field text-sm w-32" value={monedaDefault} onChange={e => setMonedaDefault(e.target.value)}>
                 <option value="ARS">$ ARS</option>
                 <option value="USD">U$S USD</option>
@@ -832,20 +1011,21 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "rgba(255,255,255,0.35)" }}>Tipo de movimiento</label>
+              <label className="block text-xs font-semibold uppercase mb-1" style={{ color: "var(--fg-6)" }}>Tipo de movimiento</label>
               <select className="input-field text-sm w-44" value={tipoDefault} onChange={e => setTipoDefault(e.target.value as any)}>
                 <option value="auto">Auto-detectar</option>
                 <option value="gasto">Todo como Gasto</option>
                 <option value="ingreso">Todo como Ingreso</option>
               </select>
             </div>
-            <p className="text-xs flex-1" style={{ color: "rgba(255,255,255,0.30)" }}>
-              Si tu resumen es de tarjeta de crédito, elegí "Todo como Gasto".
+            <p className="text-xs flex-1" style={{ color: "var(--fg-6)" }}>
+              Dejalo en <b>Auto-detectar</b>: en un resumen de tarjeta toma todo como gasto,
+              salvo las devoluciones, que las reconoce por el signo negativo.
             </p>
           </div>
 
           <div className="glass-card p-5">
-            <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: "rgba(255,255,255,0.35)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: "var(--fg-6)" }}>
               Verificá el mapeo de columnas
             </p>
             
@@ -858,8 +1038,8 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
             <div className="space-y-3">
               {rawHeaders.map((col) => (
                 <div key={col} className="flex items-center gap-3 bg-white/5 p-2 rounded-lg">
-                  <span className="text-sm w-40 truncate font-mono" title={col} style={{ color: "rgba(255,255,255,0.75)" }}>{col}</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  <span className="text-sm w-40 truncate font-mono" title={col} style={{ color: "var(--fg-3)" }}>{col}</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--fg-6)" }}><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                   <select
                     className="input-field text-sm flex-1 bg-[#1A1A24] text-white"
                     value={mapeo[col] || "ignorar"}
@@ -869,6 +1049,61 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                   </select>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Cómo quedan las primeras filas con el mapeo elegido */}
+          <div className="glass-card p-5">
+            <div className="flex items-baseline justify-between mb-1">
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--fg-6)" }}>
+                Así se leen tus datos
+              </p>
+              <span className="text-[10px]" style={{ color: "var(--fg-7)" }}>
+                primeras {Math.min(5, rawRows.length)} de {rawRows.length} filas
+              </span>
+            </div>
+            <p className="text-[11px] mb-3" style={{ color: "var(--fg-6)" }}>
+              Si alguna columna se ve vacía o con el dato equivocado, corregí el mapeo de arriba.
+            </p>
+
+            {mapeoFaltante.length > 0 && (
+              <div className="alert-card warning mb-3">
+                <span className="text-xs">
+                  Falta mapear: <b>{mapeoFaltante.join(", ")}</b>. Sin eso las filas no se pueden importar.
+                </span>
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ color: "var(--fg-6)" }}>
+                    {PREVIEW_COLUMNS.map(c => (
+                      <th key={c.campo} className="text-left font-semibold uppercase tracking-wider pb-2 pr-4 whitespace-nowrap text-[10px]">
+                        {c.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewMapeo.map((fila, i) => (
+                    <tr key={i} className="border-t" style={{ borderColor: "var(--bd-faint)" }}>
+                      {PREVIEW_COLUMNS.map(c => {
+                        const v = fila[c.campo];
+                        return (
+                          <td
+                            key={c.campo}
+                            className={`py-2 pr-4 whitespace-nowrap ${c.mono ? "font-mono" : ""}`}
+                            style={{ color: v ? "var(--fg-2)" : "var(--fg-7)" }}
+                          >
+                            {v || (c.requerida ? "— falta —" : "—")}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -920,7 +1155,7 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {processedRows.filter(r => hideDuplicates ? !r.isDuplicate : true).map((r, i) => {
+                  {processedRows.filter(r => hideDuplicates ? !r.isDuplicate : true).map((r) => {
                     // Find actual index in processedRows to update state correctly
                     const actualIndex = processedRows.indexOf(r);
                     return (
@@ -1052,7 +1287,7 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                                 newRows[actualIndex].crearRecurrente = e.target.checked;
                                 setProcessedRows(newRows);
                               }} />
-                              Crear en "Periódicos" automáticamente
+                              Crear en &quot;Periódicos&quot; automáticamente
                             </label>
                           </div>
                         )}
@@ -1068,6 +1303,9 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
                               const newRows = [...processedRows];
                               newRows[actualIndex].categoria_id = e.target.value;
                               setProcessedRows(newRows);
+                              // Corregir acá también enseña: la próxima vez
+                              // que aparezca este comercio ya viene resuelto.
+                              recordarCorreccion(newRows[actualIndex].descripcion, e.target.value);
                             }
                           }}
                         >
@@ -1121,8 +1359,8 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
           <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(16,185,129,0.15)", border: "2px solid #10B981" }}>
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
-          <p className="text-2xl font-bold mb-2" style={{ color: "rgba(255,255,255,0.9)" }}>¡Importación exitosa!</p>
-          <p className="text-sm mb-6" style={{ color: "rgba(255,255,255,0.45)" }}>Los movimientos han sido registrados y el archivo guardado como resguardo.</p>
+          <p className="text-2xl font-bold mb-2" style={{ color: "var(--fg-1)" }}>¡Importación exitosa!</p>
+          <p className="text-sm mb-6" style={{ color: "var(--fg-5)" }}>Los movimientos han sido registrados y el archivo guardado como resguardo.</p>
           
           <div className="flex gap-4 justify-center">
             <button onClick={() => { setPaso(0); setArchivo(null); setProcessedRows([]); setRawRows([]); setTipoResumen(null); setFechaCierre(""); }} className="btn-secondary">
@@ -1138,16 +1376,16 @@ export default function ImportarClient({ accounts, categories }: ImportarClientP
       {/* Create Category Modal */}
       {creatingCategoryRow !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="glass-card w-full max-w-sm p-6 animate-slide-up">
-            <h2 className="text-xl font-bold mb-4" style={{ color: "rgba(255,255,255,0.9)" }}>Nueva Categoría</h2>
+          <div className="glass-card modal-panel w-full max-w-sm p-6 animate-slide-up">
+            <h2 className="text-xl font-bold mb-4" style={{ color: "var(--fg-1)" }}>Nueva Categoría</h2>
             <form onSubmit={handleCreateCategory} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Nombre</label>
+                <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Nombre</label>
                 <input className="input-field" type="text" required autoFocus placeholder="Ej: Suscripciones"
                   value={newCatName} onChange={e => setNewCatName(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Ícono</label>
+                <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Ícono</label>
                 <div className="grid grid-cols-6 gap-2">
                   {EMOJIS.map(em => (
                     <button key={em} type="button" onClick={() => setNewCatIcon(em)}

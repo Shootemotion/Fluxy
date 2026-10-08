@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { getMovementsForReport } from "@/lib/actions";
 import { formatCurrency } from "@/lib/utils";
+import { useChartTokens } from "@/lib/chart-theme";
 
 type ReportMovement = {
   id: string;
@@ -79,6 +80,7 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
   const [customTo, setCustomTo]       = useState(initialEnd);
   const [movements, setMovements]     = useState<ReportMovement[]>(initialMovements);
   const [loading, setLoading]         = useState(false);
+  const chart = useChartTokens();
 
   const loadData = useCallback(async (p: Period, from?: string, to?: string) => {
     const { start, end } = getPeriodDates(p, from, to);
@@ -191,7 +193,7 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
     const toArs = (monto: number, moneda: string) => moneda === "USD" ? monto * tcUsd : monto;
     const items: { nombre: string; valor: number; color: string }[] = [];
 
-    const cuentasTotal = accounts.reduce((s: number, a: any) => s + toArs(Number(a.saldo_inicial), a.moneda), 0);
+    const cuentasTotal = accounts.reduce((s: number, a: any) => s + toArs(Number(a.saldo ?? a.saldo_inicial), a.moneda), 0);
     if (cuentasTotal > 0) items.push({ nombre: "Cuentas", valor: cuentasTotal, color: "#22D3EE" });
 
     posiciones.forEach((p: any) => {
@@ -251,8 +253,8 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
               onClick={() => handlePeriod(p.value)}
               className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
               style={{
-                background: period === p.value ? "#6C63FF" : "rgba(255,255,255,0.06)",
-                color: period === p.value ? "white" : "rgba(255,255,255,0.55)",
+                background: period === p.value ? "#6C63FF" : "var(--bg-hover)",
+                color: period === p.value ? "white" : "var(--fg-4)",
                 border: period === p.value ? "1px solid #6C63FF" : "1px solid transparent",
               }}
             >
@@ -305,8 +307,8 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
       {!loading && isEmpty && (
         <div className="glass-card p-12 text-center">
           <p className="text-3xl mb-3">📊</p>
-          <p className="font-semibold" style={{ color: "rgba(255,255,255,0.7)" }}>Sin datos para el período</p>
-          <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>Registrá movimientos para ver tus reportes</p>
+          <p className="font-semibold" style={{ color: "var(--fg-3)" }}>Sin datos para el período</p>
+          <p className="text-sm mt-1" style={{ color: "var(--fg-6)" }}>Registrá movimientos para ver tus reportes</p>
         </div>
       )}
 
@@ -334,17 +336,17 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
           {/* Monthly evolution chart */}
           {monthlyData.length > 1 && (
             <div className="glass-card p-5">
-              <h2 className="text-sm font-semibold mb-4" style={{ color: "rgba(255,255,255,0.75)" }}>
+              <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--fg-3)" }}>
                 Evolución mensual
               </h2>
               <ResponsiveContainer width="100%" height={260}>
                 <ComposedChart data={monthlyData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="mes" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={fmtShort} tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }} axisLine={false} tickLine={false} width={56} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+                  <XAxis dataKey="mes" tick={{ fill: chart.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={fmtShort} tick={{ fill: chart.tickMuted, fontSize: 11 }} axisLine={false} tickLine={false} width={56} />
                   <Tooltip
-                    contentStyle={{ background: "#1E1B3A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
-                    labelStyle={{ color: "rgba(255,255,255,0.7)", fontWeight: 600, marginBottom: 4 }}
+                    contentStyle={{ background: "#1E1B3A", border: "1px solid var(--bd)", borderRadius: 8, fontSize: 12 }}
+                    labelStyle={{ color: "var(--fg-3)", fontWeight: 600, marginBottom: 4 }}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     formatter={((value: any, name: string) => [
                       formatCurrency(Number(value ?? 0), "ARS"),
@@ -353,7 +355,7 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
                   />
                   <Legend
                     formatter={(value) => value === "ingresos" ? "Ingresos" : value === "gastos" ? "Gastos" : "Ahorro"}
-                    wrapperStyle={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}
+                    wrapperStyle={{ fontSize: 12, color: "var(--fg-4)" }}
                   />
                   <Bar dataKey="ingresos" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={36} fillOpacity={0.85} />
                   <Bar dataKey="gastos"   fill="#EF4444" radius={[4, 4, 0, 0]} maxBarSize={36} fillOpacity={0.85} />
@@ -367,11 +369,11 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Donut + legend */}
             <div className="glass-card p-5">
-              <h2 className="text-sm font-semibold mb-4" style={{ color: "rgba(255,255,255,0.75)" }}>
+              <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--fg-3)" }}>
                 Gastos por categoría
               </h2>
               {pieData.length === 0 ? (
-                <p className="text-sm text-center py-8" style={{ color: "rgba(255,255,255,0.3)" }}>Sin gastos en el período</p>
+                <p className="text-sm text-center py-8" style={{ color: "var(--fg-6)" }}>Sin gastos en el período</p>
               ) : (
                 <div className="flex flex-col gap-4">
                   <ResponsiveContainer width="100%" height={200}>
@@ -390,7 +392,7 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{ background: "#1E1B3A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                        contentStyle={{ background: "#1E1B3A", border: "1px solid var(--bd)", borderRadius: 8, fontSize: 12 }}
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         formatter={((value: any, _: string, props: any) => [
                           formatCurrency(Number(value ?? 0), "ARS"),
@@ -404,13 +406,13 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
                       <div key={i} className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
                           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: c.fill }} />
-                          <span style={{ color: "rgba(255,255,255,0.6)" }}>{c.icono} {c.nombre}</span>
+                          <span style={{ color: "var(--fg-4)" }}>{c.icono} {c.nombre}</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
+                          <span className="text-xs" style={{ color: "var(--fg-6)" }}>
                             {gastos > 0 ? ((c.total / gastos) * 100).toFixed(1) : "0"}%
                           </span>
-                          <span className="font-semibold text-xs" style={{ color: "rgba(255,255,255,0.8)" }}>
+                          <span className="font-semibold text-xs" style={{ color: "var(--fg-2)" }}>
                             {formatCurrency(c.total, "ARS")}
                           </span>
                         </div>
@@ -423,11 +425,11 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
 
             {/* Category bar chart */}
             <div className="glass-card p-5">
-              <h2 className="text-sm font-semibold mb-4" style={{ color: "rgba(255,255,255,0.75)" }}>
+              <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--fg-3)" }}>
                 Top categorías de gasto
               </h2>
               {categoryData.length === 0 ? (
-                <p className="text-sm text-center py-8" style={{ color: "rgba(255,255,255,0.3)" }}>Sin gastos en el período</p>
+                <p className="text-sm text-center py-8" style={{ color: "var(--fg-6)" }}>Sin gastos en el período</p>
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart
@@ -435,21 +437,21 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
                     layout="vertical"
                     margin={{ top: 0, right: 8, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-                    <XAxis type="number" tickFormatter={fmtShort} tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} horizontal={false} />
+                    <XAxis type="number" tickFormatter={fmtShort} tick={{ fill: chart.tickMuted, fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis
                       type="category"
                       dataKey="nombre"
                       width={90}
-                      tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 11 }}
+                      tick={{ fill: chart.label, fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
                       tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 12) + "…" : v}
                     />
                     <Tooltip
-                      contentStyle={{ background: "#1E1B3A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                      contentStyle={{ background: "#1E1B3A", border: "1px solid var(--bd)", borderRadius: 8, fontSize: 12 }}
                       formatter={((value: any) => [formatCurrency(Number(value ?? 0), "ARS"), "Total"]) as any}
-                      cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                      cursor={{ fill: chart.cursor }}
                     />
                     <Bar dataKey="total" radius={[0, 4, 4, 0]} maxBarSize={20}>
                       {categoryData.slice(0, 8).map((_, i) => (
@@ -464,15 +466,15 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
 
           {/* Top expenses table */}
           <div className="glass-card p-5">
-            <h2 className="text-sm font-semibold mb-4" style={{ color: "rgba(255,255,255,0.75)" }}>
+            <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--fg-3)" }}>
               Mayores gastos del período
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                  <tr style={{ borderBottom: "1px solid var(--bd)" }}>
                     {["Fecha", "Descripción", "Categoría", "Cuenta", "Monto"].map(h => (
-                      <th key={h} className="text-left pb-2 px-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>{h}</th>
+                      <th key={h} className="text-left pb-2 px-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--fg-6)" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -480,19 +482,19 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
                   {topGastos.map(m => (
                     <tr
                       key={m.id}
-                      style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+                      style={{ borderBottom: "1px solid var(--bd-faint)" }}
                       className="hover:bg-white/[0.02] transition-colors"
                     >
-                      <td className="py-2.5 px-2 text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+                      <td className="py-2.5 px-2 text-xs" style={{ color: "var(--fg-5)" }}>
                         {new Date(m.fecha + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}
                       </td>
-                      <td className="py-2.5 px-2 max-w-[200px]" style={{ color: "rgba(255,255,255,0.75)" }}>
+                      <td className="py-2.5 px-2 max-w-[200px]" style={{ color: "var(--fg-3)" }}>
                         <span className="block truncate">{m.descripcion || "—"}</span>
                       </td>
-                      <td className="py-2.5 px-2 text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
+                      <td className="py-2.5 px-2 text-xs" style={{ color: "var(--fg-4)" }}>
                         {m.categorias ? `${m.categorias.icono || ""} ${m.categorias.nombre}` : "—"}
                       </td>
-                      <td className="py-2.5 px-2 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
+                      <td className="py-2.5 px-2 text-xs" style={{ color: "var(--fg-5)" }}>
                         {m.cuenta_origen?.nombre || "—"}
                       </td>
                       <td className="py-2.5 px-2 text-right font-semibold text-xs" style={{ color: "#EF4444" }}>
@@ -508,20 +510,20 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
           {/* Flow by account */}
           {accountFlowData.length > 0 && (
             <div className="glass-card p-5">
-              <h2 className="text-sm font-semibold mb-4" style={{ color: "rgba(255,255,255,0.75)" }}>
+              <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--fg-3)" }}>
                 Flujo por cuenta
               </h2>
               <ResponsiveContainer width="100%" height={Math.max(160, accountFlowData.length * 52)}>
                 <BarChart data={accountFlowData} layout="vertical" margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-                  <XAxis type="number" tickFormatter={fmtShort} tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} horizontal={false} />
+                  <XAxis type="number" tickFormatter={fmtShort} tick={{ fill: chart.tickMuted, fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="nombre" width={100}
-                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 11 }} axisLine={false} tickLine={false}
+                    tick={{ fill: chart.label, fontSize: 11 }} axisLine={false} tickLine={false}
                     tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 14) + "…" : v} />
                   <Tooltip
-                    contentStyle={{ background: "#1E1B3A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                    contentStyle={{ background: "#1E1B3A", border: "1px solid var(--bd)", borderRadius: 8, fontSize: 12 }}
                     formatter={((value: any, name: string) => [formatCurrency(Number(value ?? 0), "ARS"), name === "ingresos" ? "Ingresos" : "Gastos"]) as any}
-                    cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                    cursor={{ fill: chart.cursor }}
                   />
                   <Bar dataKey="ingresos" fill="#10B981" fillOpacity={0.85} radius={[0, 4, 4, 0]} maxBarSize={16} />
                   <Bar dataKey="gastos"   fill="#EF4444" fillOpacity={0.85} radius={[0, 4, 4, 0]} maxBarSize={16} />
@@ -533,39 +535,39 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
           {/* Flow by currency */}
           {currencyFlowData.length > 0 && (
             <div className="glass-card p-5">
-              <h2 className="text-sm font-semibold mb-4" style={{ color: "rgba(255,255,255,0.75)" }}>
+              <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--fg-3)" }}>
                 Flujo por moneda
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {currencyFlowData.map(c => (
                   <div key={c.moneda} className="rounded-xl p-4 space-y-3"
-                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.45)" }}>
+                    style={{ background: "var(--bg-faint)", border: "1px solid var(--bd)" }}>
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--fg-5)" }}>
                       {c.moneda === "USD" ? "🇺🇸 USD" : c.moneda === "ARS" ? "🇦🇷 ARS" : c.moneda}
                     </p>
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>Ingresos</span>
+                        <span className="text-xs" style={{ color: "var(--fg-5)" }}>Ingresos</span>
                         <span className="font-mono font-bold text-sm text-emerald-400">{formatCurrency(c.ingresos, c.moneda)}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>Gastos</span>
+                        <span className="text-xs" style={{ color: "var(--fg-5)" }}>Gastos</span>
                         <span className="font-mono font-bold text-sm text-rose-400">{formatCurrency(c.gastos, c.moneda)}</span>
                       </div>
-                      <div className="h-px" style={{ background: "rgba(255,255,255,0.07)" }} />
+                      <div className="h-px" style={{ background: "var(--bg-hover)" }} />
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.55)" }}>Ahorro neto</span>
+                        <span className="text-xs font-semibold" style={{ color: "var(--fg-4)" }}>Ahorro neto</span>
                         <span className={`font-mono font-bold text-sm ${c.ahorro >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                           {c.ahorro >= 0 ? "+" : ""}{formatCurrency(c.ahorro, c.moneda)}
                         </span>
                       </div>
                       {c.ingresos > 0 && (
                         <div className="pt-1">
-                          <div className="flex justify-between text-[10px] mb-1" style={{ color: "rgba(255,255,255,0.35)" }}>
+                          <div className="flex justify-between text-[10px] mb-1" style={{ color: "var(--fg-6)" }}>
                             <span>Tasa de ahorro</span>
                             <span>{((c.ahorro / c.ingresos) * 100).toFixed(1)}%</span>
                           </div>
-                          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+                          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--bg-hover)" }}>
                             <div className="h-full rounded-full" style={{
                               width: `${Math.max(0, Math.min(100, (c.ahorro / c.ingresos) * 100))}%`,
                               background: c.ahorro >= 0 ? "#10B981" : "#EF4444",
@@ -584,10 +586,10 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
           {portfolioBreakdown && portfolioBreakdown.total > 0 && (
             <div className="glass-card p-5">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.75)" }}>
+                <h2 className="text-sm font-semibold" style={{ color: "var(--fg-3)" }}>
                   Composición de cartera
                 </h2>
-                <span className="text-xs font-mono font-bold" style={{ color: "rgba(255,255,255,0.55)" }}>
+                <span className="text-xs font-mono font-bold" style={{ color: "var(--fg-4)" }}>
                   Total: {fmtShort(portfolioBreakdown.total)}
                 </span>
               </div>
@@ -601,7 +603,7 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
                       ))}
                     </Pie>
                     <Tooltip
-                      contentStyle={{ background: "#1E1B3A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                      contentStyle={{ background: "#1E1B3A", border: "1px solid var(--bd)", borderRadius: 8, fontSize: 12 }}
                       formatter={((value: any, _: any, props: any) => [formatCurrency(Number(value ?? 0), "ARS"), props.payload.nombre]) as any}
                     />
                   </PieChart>
@@ -611,13 +613,13 @@ export default function ReportesClient({ initialMovements, initialPeriod, initia
                     <div key={i} className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: item.color }} />
-                        <span className="text-sm truncate" style={{ color: "rgba(255,255,255,0.65)" }}>{item.nombre}</span>
+                        <span className="text-sm truncate" style={{ color: "var(--fg-3)" }}>{item.nombre}</span>
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
-                        <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
+                        <span className="text-xs" style={{ color: "var(--fg-6)" }}>
                           {portfolioBreakdown.total > 0 ? ((item.valor / portfolioBreakdown.total) * 100).toFixed(1) : "0"}%
                         </span>
-                        <span className="font-semibold text-xs font-mono" style={{ color: "rgba(255,255,255,0.8)" }}>
+                        <span className="font-semibold text-xs font-mono" style={{ color: "var(--fg-2)" }}>
                           {fmtShort(item.valor)}
                         </span>
                       </div>
@@ -645,7 +647,7 @@ function KpiCard({ label, value, color, icon, isPercent }: { label: string; valu
   return (
     <div className="glass-card p-4" style={{ borderLeft: `3px solid ${color}40` }}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.38)" }}>{label}</span>
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--fg-5)" }}>{label}</span>
         <span className="text-base">{icon}</span>
       </div>
       <p className="text-xl font-bold leading-none" style={{ color }}>
@@ -660,8 +662,8 @@ function KpiCard({ label, value, color, icon, isPercent }: { label: string; valu
 function StatPill({ label, value }: { label: string; value: string }) {
   return (
     <div className="glass-card px-4 py-3 flex items-center justify-between gap-2">
-      <span className="text-xs" style={{ color: "rgba(255,255,255,0.38)" }}>{label}</span>
-      <span className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.75)" }}>{value}</span>
+      <span className="text-xs" style={{ color: "var(--fg-5)" }}>{label}</span>
+      <span className="text-sm font-semibold" style={{ color: "var(--fg-3)" }}>{value}</span>
     </div>
   );
 }

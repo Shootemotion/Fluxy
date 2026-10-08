@@ -17,11 +17,11 @@ interface ConfiguracionClientProps {
 function SectionCard({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
   return (
     <div className="glass-card overflow-hidden">
-      <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid var(--bd-faint)" }}>
         <span className="text-lg">{icon}</span>
-        <h2 className="font-semibold text-sm" style={{ color: "rgba(255,255,255,0.9)" }}>{title}</h2>
+        <h2 className="font-semibold text-sm" style={{ color: "var(--fg-1)" }}>{title}</h2>
       </div>
-      <div className="divide-y" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
+      <div className="divide-y" style={{ borderColor: "var(--bd-faint)" }}>
         {children}
       </div>
     </div>
@@ -32,8 +32,8 @@ function Row({ label, desc, children, danger }: { label: string; desc?: string; 
   return (
     <div className="px-5 py-4 flex items-center justify-between gap-4">
       <div className="min-w-0">
-        <p className="text-sm font-medium" style={{ color: danger ? "#EF4444" : "rgba(255,255,255,0.85)" }}>{label}</p>
-        {desc && <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>{desc}</p>}
+        <p className="text-sm font-medium" style={{ color: danger ? "#EF4444" : "var(--fg-2)" }}>{label}</p>
+        {desc && <p className="text-xs mt-0.5" style={{ color: "var(--fg-6)" }}>{desc}</p>}
       </div>
       {children}
     </div>
@@ -192,8 +192,8 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
   return (
     <div className="max-w-2xl space-y-6">
       <div className="mb-2">
-        <h1 className="text-2xl font-bold" style={{ color: "rgba(255,255,255,0.95)" }}>Configuración</h1>
-        <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.38)" }}>Personalizá Fluxy a tu gusto</p>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--fg-hi)" }}>Configuración</h1>
+        <p className="text-sm mt-0.5" style={{ color: "var(--fg-5)" }}>Personalizá Fluxy a tu gusto</p>
       </div>
 
       {/* ── PERFIL ── */}
@@ -205,10 +205,10 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
             {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold" style={{ color: "rgba(255,255,255,0.90)" }}>
+            <p className="font-semibold" style={{ color: "var(--fg-1)" }}>
               {profile?.nombre || user?.user_metadata?.nombre || "Sin nombre"}
             </p>
-            <p className="text-sm" style={{ color: "rgba(255,255,255,0.40)" }}>{user?.email}</p>
+            <p className="text-sm" style={{ color: "var(--fg-5)" }}>{user?.email}</p>
             <div className="flex gap-1.5 mt-1.5 flex-wrap">
               {hasEmail  && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: "rgba(108,99,255,0.20)", color: "#A5A0FF" }}>Email</span>}
               {hasGoogle && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: "rgba(66,133,244,0.20)", color: "#60A5FA" }}>Google</span>}
@@ -217,18 +217,18 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
         </div>
 
         {/* Editar nombre */}
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+        <div style={{ borderTop: "1px solid var(--bd-faint)" }}>
           {!editingNombre ? (
             <Row label="Nombre" desc={profile?.nombre || "Sin nombre"}>
               <button onClick={() => setEditingNombre(true)}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg"
-                style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.55)" }}>
+                style={{ background: "var(--bg-hover)", color: "var(--fg-4)" }}>
                 Editar
               </button>
             </Row>
           ) : (
             <div className="px-5 py-4 space-y-3">
-              <label className="block text-xs font-semibold uppercase" style={{ color: "rgba(255,255,255,0.40)" }}>Nombre</label>
+              <label className="block text-xs font-semibold uppercase" style={{ color: "var(--fg-5)" }}>Nombre</label>
               <input className="input-field" type="text" value={nombre}
                 onChange={e => setNombre(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleSaveNombre()}
@@ -246,7 +246,7 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
 
         {/* Email (solo lectura) */}
         <Row label="Email" desc={user?.email}>
-          <span className="text-[10px] px-2 py-1 rounded-lg" style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.30)" }}>
+          <span className="text-[10px] px-2 py-1 rounded-lg" style={{ background: "var(--bg-input)", color: "var(--fg-6)" }}>
             Solo lectura
           </span>
         </Row>
@@ -259,7 +259,7 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
             <Row label="Contraseña" desc="Cambiá tu contraseña de acceso">
               <button onClick={() => setShowPwd(true)}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg"
-                style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.55)" }}>
+                style={{ background: "var(--bg-hover)", color: "var(--fg-4)" }}>
                 Cambiar
               </button>
             </Row>
@@ -272,12 +272,12 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
               ) : (
                 <form onSubmit={handleChangePwd} className="space-y-3">
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Nueva contraseña</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Nueva contraseña</label>
                     <input className="input-field" type="password" placeholder="Mínimo 6 caracteres"
                       value={newPwd} onChange={e => setNewPwd(e.target.value)} minLength={6} required />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "rgba(255,255,255,0.40)" }}>Confirmar contraseña</label>
+                    <label className="block text-xs font-semibold uppercase mb-1.5" style={{ color: "var(--fg-5)" }}>Confirmar contraseña</label>
                     <input className="input-field" type="password" placeholder="Repetí la contraseña"
                       value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} required />
                   </div>
@@ -324,14 +324,14 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
       <SectionCard icon="🎨" title="Apariencia e idioma">
         {/* Tema */}
         <Row label="Tema" desc={tema === "dark" ? "Modo oscuro" : "Modo claro"}>
-          <div className="flex gap-1 p-1 rounded-xl" style={{ background: "rgba(255,255,255,0.05)" }}>
+          <div className="flex gap-1 p-1 rounded-xl" style={{ background: "var(--bg-input)" }}>
             {(["dark", "light"] as const).map(t => (
               <button key={t} onClick={() => handleSaveApariencia(t)}
                 disabled={aparienciaLoading}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
                 style={tema === t
                   ? { background: "rgba(108,99,255,0.30)", color: "#A5A0FF" }
-                  : { color: "rgba(255,255,255,0.40)" }}>
+                  : { color: "var(--fg-5)" }}>
                 {t === "dark" ? "🌙 Oscuro" : "☀️ Claro"}
               </button>
             ))}
@@ -340,14 +340,14 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
 
         {/* Idioma */}
         <Row label="Idioma" desc={idioma === "es" ? "Español" : "English"}>
-          <div className="flex gap-1 p-1 rounded-xl" style={{ background: "rgba(255,255,255,0.05)" }}>
+          <div className="flex gap-1 p-1 rounded-xl" style={{ background: "var(--bg-input)" }}>
             {[{ value: "es", label: "🇦🇷 ES" }, { value: "en", label: "🇺🇸 EN" }].map(l => (
               <button key={l.value} onClick={() => handleSaveApariencia(undefined, l.value)}
                 disabled={aparienciaLoading}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
                 style={idioma === l.value
                   ? { background: "rgba(108,99,255,0.30)", color: "#A5A0FF" }
-                  : { color: "rgba(255,255,255,0.40)" }}>
+                  : { color: "var(--fg-5)" }}>
                 {l.label}
               </button>
             ))}
@@ -356,14 +356,14 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
 
         {/* Moneda principal */}
         <Row label="Moneda principal" desc="Moneda por defecto para movimientos y reportes">
-          <div className="flex gap-1 p-1 rounded-xl" style={{ background: "rgba(255,255,255,0.05)" }}>
+          <div className="flex gap-1 p-1 rounded-xl" style={{ background: "var(--bg-input)" }}>
             {["ARS", "USD", "EUR"].map(m => (
               <button key={m} onClick={() => handleSaveApariencia(undefined, undefined, m)}
                 disabled={aparienciaLoading}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold font-mono transition-all"
                 style={monedaPpal === m
                   ? { background: "rgba(108,99,255,0.30)", color: "#A5A0FF" }
-                  : { color: "rgba(255,255,255,0.40)" }}>
+                  : { color: "var(--fg-5)" }}>
                 {m}
               </button>
             ))}
@@ -381,13 +381,13 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
             >
               <button onClick={() => setEditingTc(true)}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg"
-                style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.55)" }}>
+                style={{ background: "var(--bg-hover)", color: "var(--fg-4)" }}>
                 {currentTc ? "Actualizar" : "Configurar"}
               </button>
             </Row>
           ) : (
             <div className="px-5 py-4 space-y-3">
-              <label className="block text-xs font-semibold uppercase" style={{ color: "rgba(255,255,255,0.40)" }}>
+              <label className="block text-xs font-semibold uppercase" style={{ color: "var(--fg-5)" }}>
                 Valor del dólar (ARS por 1 USD)
               </label>
               <input className="input-field font-mono" type="number" placeholder="Ej: 1200"
@@ -403,7 +403,7 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
           )}
         </div>
         <Row label="Moneda principal" desc="Pesos Argentinos (ARS)">
-          <span className="text-xs font-mono font-bold px-2 py-1 rounded-lg" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.50)" }}>ARS</span>
+          <span className="text-xs font-mono font-bold px-2 py-1 rounded-lg" style={{ background: "var(--bg-hover)", color: "var(--fg-4)" }}>ARS</span>
         </Row>
       </SectionCard>
 
@@ -412,19 +412,19 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
         <Link href="/app/categorias"
           className="flex items-center justify-between px-5 py-3.5 transition-colors hover:bg-white/[0.02]">
           <div>
-            <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.80)" }}>Gestionar categorías</p>
-            <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>Crear, editar y organizar categorías</p>
+            <p className="text-sm font-medium" style={{ color: "var(--fg-2)" }}>Gestionar categorías</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--fg-6)" }}>Crear, editar y organizar categorías</p>
           </div>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "rgba(255,255,255,0.20)" }}><path d="M9 18l6-6-6-6"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--fg-7)" }}><path d="M9 18l6-6-6-6"/></svg>
         </Link>
         <Link href="/app/recurrentes"
           className="flex items-center justify-between px-5 py-3.5 transition-colors hover:bg-white/[0.02]"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+          style={{ borderTop: "1px solid var(--bd-faint)" }}>
           <div>
-            <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.80)" }}>Gastos e ingresos periódicos</p>
-            <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>Administrar pagos recurrentes</p>
+            <p className="text-sm font-medium" style={{ color: "var(--fg-2)" }}>Gastos e ingresos periódicos</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--fg-6)" }}>Administrar pagos recurrentes</p>
           </div>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "rgba(255,255,255,0.20)" }}><path d="M9 18l6-6-6-6"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--fg-7)" }}><path d="M9 18l6-6-6-6"/></svg>
         </Link>
       </SectionCard>
 
@@ -433,7 +433,7 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
         <Row label="Exportar mis movimientos" desc="Descargá tu historial completo en formato CSV">
           <button onClick={handleExport} disabled={exportLoading}
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
-            style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.55)" }}>
+            style={{ background: "var(--bg-hover)", color: "var(--fg-4)" }}>
             {exportLoading ? "Generando..." : (
               <>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -460,7 +460,7 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
           </Row>
         ) : (
           <div className="px-5 py-4 space-y-3">
-            <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.80)" }}>¿Seguro que querés cerrar sesión?</p>
+            <p className="text-sm font-medium" style={{ color: "var(--fg-2)" }}>¿Seguro que querés cerrar sesión?</p>
             <div className="flex gap-2">
               <button onClick={() => setConfirmSignOut(false)} className="btn-secondary text-sm flex-1">Cancelar</button>
               <button onClick={handleSignOut}
@@ -473,7 +473,7 @@ export default function ConfiguracionClient({ user, profile }: ConfiguracionClie
         )}
       </SectionCard>
 
-      <p className="text-center text-xs mt-8" style={{ color: "rgba(255,255,255,0.20)" }}>
+      <p className="text-center text-xs mt-8" style={{ color: "var(--fg-7)" }}>
         Fluxy v1.0 · Hecho con 💜 en Argentina
       </p>
     </div>
